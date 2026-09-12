@@ -110,11 +110,17 @@ private func parseASS(_ content: String) -> [SubtitleCue] {
             guard let r = Range(match.range(at: idx), in: line) else { return nil }
             return Int(line[r])
         }
-        guard let sh = value(1), let sm = value(2), let ss = value(3), let scs = value(4),
-              let eh = value(5), let em = value(6), let es = value(7), let ecs = value(8) else { continue }
+        // The fractional field is centiseconds in the canonical 2-digit form
+        // but milliseconds in the 3-digit form, so scale it by its width.
+        func fraction(_ idx: Int) -> Int? {
+            guard let r = Range(match.range(at: idx), in: line) else { return nil }
+            return milliseconds(fromFraction: String(line[r]))
+        }
+        guard let sh = value(1), let sm = value(2), let ss = value(3), let sms = fraction(4),
+              let eh = value(5), let em = value(6), let es = value(7), let ems = fraction(8) else { continue }
 
-        let start = timeToSeconds(sh, sm, ss, scs * 10)
-        let end = timeToSeconds(eh, em, es, ecs * 10)
+        let start = timeToSeconds(sh, sm, ss, sms)
+        let end = timeToSeconds(eh, em, es, ems)
 
         // Text is everything after the 9th comma-separated field.
         let fields = line.components(separatedBy: ",")
@@ -134,6 +140,18 @@ private func stripASSTags(_ text: String) -> String {
     return noOverrides.replacingOccurrences(of: #"\\N|\\n"#, with: "\n", options: .regularExpression)
 }
 
+/// ASS/SSA writes the fractional part of a timestamp as centiseconds (`H:MM:SS.cc`),
+/// but some tools emit milliseconds (`H:MM:SS.mmm`). Scale by the field's width so
+/// that both forms land on the correct time.
+private func milliseconds(fromFraction digits: String) -> Int? {
+    guard let value = Int(digits) else { return nil }
+    switch digits.count {
+    case 2: return value * 10 // centiseconds
+    case 3: return value // milliseconds
+    default: return nil
+    }
+}
+
 @MainActor
 final class PlayerModel: ObservableObject {
     
@@ -141,7 +159,6 @@ final class PlayerModel: ObservableObject {
     @Published var currentTime: Double = 0
     @Published var duration: Double = 0
     @Published var isScrubbing: Bool = false
-    @Published var currentFileName: String = ""
     @Published var subtitleCues: [SubtitleCue] = []
     @Published var subtitlesEnabled: Bool = false
     @Published var subtitleOffset: Double = 0.0
@@ -181,8 +198,7 @@ final class PlayerModel: ObservableObject {
         duration = 0
 
         let item = AVPlayerItem(url: url)
-        currentFileName = url.lastPathComponent
-        
+
         itemDurationObservation = item.observe(\.duration, options: [.new]) { item, _ in
                     Task { @MainActor [weak self] in
                         guard let self else { return }
@@ -214,6 +230,15 @@ final class PlayerModel: ObservableObject {
         isPlaying.toggle()
     }
     
+    /// Starts real reverse playback when the current item supports it.
+    /// Returns `false` when it does not, so callers can fall back to
+    /// simulated reverse scrubbing.
+    func beginReversePlayback(rate: Float = -1.0) -> Bool {
+        guard isPlaying, let item = player.currentItem, item.canPlayReverse else { return false }
+        player.rate = rate
+        return true
+    }
+
     func seek(to seconds: Double) {
         let time = CMTime(seconds: seconds, preferredTimescale: 600)
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)

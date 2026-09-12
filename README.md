@@ -5,7 +5,7 @@ A minimal, fully native video and audio player for macOS built entirely with Swi
 ## Features
 
 - **Zero dependencies** – Pure Swift using only AVFoundation and SwiftUI
-- **Hardware-accelerated playback** – Leverages Apple Silicon's dedicated video decoder for smooth, power-efficient performance
+- **Hardware-accelerated decoding** – Video is decoded through AVFoundation/VideoToolbox, which on Apple Silicon is handled by the dedicated media engine for smooth, power-efficient playback
 - **Intuitive controls** – Play/pause, scrubber with time display, and keyboard shortcuts
 - **Subtitle support** – SRT, VTT, and ASS/SSA formats with adjustable delay
 - **Minimal UI** – Clean interface that fades away when idle, keeps focus on your content
@@ -17,10 +17,53 @@ A minimal, fully native video and audio player for macOS built entirely with Swi
 **Video:** MP4, MOV, M4V  
 **Audio:** MP3, M4A, AAC, WAV, AIFF, CAF
 
+## Installation
+
+1. Download the latest `SwiftPlayer.app` from the [Releases page](https://github.com/scadavide55/SwiftPlayer/releases).
+2. Move it to your `Applications` folder.
+3. Launch it.
+
+The app is **ad-hoc signed** (it has no Apple Developer Team ID), so macOS cannot verify the developer and Gatekeeper will block the first launch with a message along the lines of *"Apple cannot check it for malicious software."* This is expected for an unsigned open-source build. Clear it with either of these two remedies:
+
+**Option A — Right-click to open**
+
+1. In Finder, right-click (or Control-click) `SwiftPlayer.app` and choose **Open**.
+2. Click **Open** again in the confirmation dialog.
+
+macOS remembers the exception, so subsequent launches work normally by double-clicking.
+
+**Option B — Remove the quarantine attribute**
+
+```sh
+xattr -dr com.apple.quarantine /Applications/SwiftPlayer.app
+```
+
+After that the app launches normally.
+
+## Build from Source
+
+Requirements: **Xcode 16 or later** and **macOS 13.0 or later**.
+
+```sh
+git clone https://github.com/scadavide55/SwiftPlayer.git
+cd SwiftPlayer
+open SwiftPlayer.xcodeproj
+```
+
+Select the `SwiftPlayer` scheme and press **Run** (⌘R). The project uses Xcode's file-system-synchronized groups, so no project-file edits are needed to add or rename source files.
+
+To run the unit tests (subtitle parsers):
+
+```sh
+xcodebuild -project SwiftPlayer.xcodeproj -scheme SwiftPlayer test
+```
+
 ## Compatibility
 
-Runs on both **Apple Silicon** and **Intel-based Macs**  
-Tested on: MacBook Air 2020 (Intel i3 Duo Core) and MacBook Air M5 ( 2026) .
+Runs on both **Apple Silicon** and **Intel-based Macs**.  
+Minimum macOS version: **13.0 (Ventura)**.
+
+Tested on: MacBook Air 2020 (Intel Core i3, dual-core) and MacBook Air M5 (2026).
 
 ## Usage
 
@@ -34,6 +77,10 @@ Tested on: MacBook Air 2020 (Intel i3 Duo Core) and MacBook Air M5 ( 2026) .
 - **Space** – Play/pause
 - **Left/Right Arrow** – Jump back/forward 5 seconds (hold to fast-seek)
 - **Home button** – Return to file selection screen
+
+## License
+
+Released under the [MIT License](LICENSE).
 
 ---
 

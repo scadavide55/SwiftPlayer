@@ -179,8 +179,9 @@ struct ContentView: View {
                     DispatchQueue.main.async {
                         if direction > 0 {
                             model.player.rate = 2.0
-                        } else {
-                            // Simulated reverse: repeated backward jumps.
+                        } else if !model.beginReversePlayback() {
+                            // Fallback for items that can't play backwards:
+                            // simulated reverse via repeated backward jumps.
                             startReverseScrub()
                         }
                     }
@@ -211,6 +212,8 @@ private func openSubtitlePicker() {
         }
     }
 
+        /// Fallback for items that don't support reverse playback: seek backwards
+        /// repeatedly instead of playing in reverse.
         private func startReverseScrub() {
             fastSeekTimer?.invalidate()
             fastSeekTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { _ in
