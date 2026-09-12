@@ -1,4 +1,4 @@
-# SwiftView
+# SwiftPlayer
 
 A minimal, fully native video and audio player for macOS built entirely with SwiftUI and AVFoundation. No third-party dependencies—just Apple's own frameworks.
 
@@ -37,4 +37,4 @@ Tested on: MacBook Air 2020 (Intel i3 Duo Core) and MacBook Air M5 ( 2026) .
 
 ---
 
-Built with Swift 5.9+ on macOS 13+
+Built with Swift 5.9+ on macOS 26.5
