@@ -20,7 +20,7 @@ A minimal, fully native video and audio player for macOS built entirely with Swi
 ## Compatibility
 
 Runs on both **Apple Silicon** and **Intel-based Macs**  
-Tested on: MacBook Air 2020 (Intel i3 Duo Core)
+Tested on: MacBook Air 2020 (Intel i3 Duo Core) and MacBook Air M5 ( 2026) .
 
 ## Usage
 
