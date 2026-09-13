@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SwiftPlayer – A lightweight, native Mac video player</title>
+<style>
+  :root {
+    --bg: #fbfbfd;
+    --text: #1d1d1f;
+    --subtext: #6e6e73;
+    --accent: #0071e3;
+    --card: #ffffff;
+    --border: #e5e5ea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000;
+      --text: #f5f5f7;
+      --subtext: #86868b;
+      --accent: #2997ff;
+      --card: #1c1c1e;
+      --border: #38383a;
+    }
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    max-width: 680px;
+    margin: 4rem auto;
+    padding: 0 1.5rem;
+    line-height: 1.6;
+    color: var(--text);
+    background: var(--bg);
+  }
+  h1 { font-size: 2.5rem; margin-bottom: 0.25rem; letter-spacing: -0.02em; }
+  h2 { margin-top: 2.5rem; font-size: 1.3rem; }
+  .sub { color: var(--subtext); margin-top: 0; font-size: 1.1rem; }
+  .btn {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 500;
+    margin: 1rem 0.5rem 1rem 0;
+    transition: opacity 0.2s;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn.secondary { 
+    background: transparent; 
+    border: 1px solid var(--border); 
+    color: var(--text); 
+  }
+  .note {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin: 1.5rem 0;
+    font-size: 0.9rem;
+  }
+  .note strong { display: block; margin-bottom: 0.5rem; }
+  code { 
+    background: var(--border); 
+    padding: 0.15rem 0.4rem; 
+    border-radius: 4px; 
+    font-size: 0.85em; 
+    font-family: ui-monospace, SFMono-Regular, monospace;
+  }
+  ul { padding-left: 1.25rem; }
+  li { margin-bottom: 0.4rem; }
+  footer { margin-top: 3rem; font-size: 0.85rem; color: var(--subtext); border-top: 1px solid var(--border); padding-top: 1.5rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+  <h1>SwiftPlayer</h1>
+  <p class="sub">A lightweight, fully native video and audio player for macOS.</p>
+
+  <p>Built entirely with SwiftUI and AVFoundation. No third-party dependencies—just Apple's own frameworks.</p>
+
+  <a class="btn" href="https://github.com/scadavide55/SwiftPlayer/releases/latest">Download v2.1.1</a>
+  <a class="btn secondary" href="https://github.com/scadavide55/SwiftPlayer">View on GitHub</a>
+
+  <h2>Features</h2>
+  <ul>
+    <li>Zero dependencies – Pure Swift</li>
+    <li>Hardware-accelerated decoding via AVFoundation/VideoToolbox</li>
+    <li>Subtitle support: SRT, VTT, ASS/SSA with adjustable delay</li>
+    <li>Minimal UI that fades away when idle</li>
+    <li>Drag &amp; drop, keyboard navigation, and space to play/pause</li>
+  </ul>
+
+  <h2>Supported Formats</h2>
+  <p><strong>Video:</strong> MP4, MOV, M4V<br>
+  <strong>Audio:</strong> MP3, M4A, AAC, WAV, AIFF, CAF</p>
+
+  <h2>Installation</h2>
+  <ol>
+    <li>Download the latest <code>SwiftPlayer.app.zip</code> from the Releases page.</li>
+    <li>Move it to your Applications folder and launch it.</li>
+  </ol>
+
+  <div class="note">
+    <strong>⚠️ First launch note</strong>
+    <p style="margin:0;">The app is ad-hoc signed, so macOS Gatekeeper will block the first launch. To open it:</p>
+    <ul style="margin: 0.5rem 0 0;">
+      <li>Right-click the app in Finder and choose <strong>Open</strong>, then <strong>Open</strong> again.</li>
+      <li><em>Or</em> run: <code>xattr -dr com.apple.quarantine /Applications/SwiftPlayer.app</code></li>
+    </ul>
+  </div>
+
+  <h2>Compatibility</h2>
+  <p>Runs on both Apple Silicon and Intel Macs. Minimum macOS version: 13.0 (Ventura).</p>
+
+  <h2>Build from Source</h2>
+  <p>Requires Xcode 16+ and macOS 13.0+.</p>
+  <pre><code>git clone https://github.com/scadavide55/SwiftPlayer.git
+cd SwiftPlayer
+open SwiftPlayer.xcodeproj</code></pre>
+
+  <footer>
+    <p>Released under the MIT License. Built with Swift using Xcode.</p>
+  </footer>
+</body>
+</html>
