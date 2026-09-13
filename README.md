@@ -84,4 +84,4 @@ Released under the [MIT License](LICENSE).
 
 ---
 
-Built with Swift 5.9+ using Xcode 16 or later.
+Built with Swift 6.3.3 using Xcode 26.6.
