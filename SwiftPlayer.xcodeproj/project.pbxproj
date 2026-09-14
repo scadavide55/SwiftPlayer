@@ -126,14 +126,6 @@
 		};
 /* End PBXNativeTarget section */
 
-/* Begin PBXTargetDependency section */
-		C0FFEE000000000000000005 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 6BD3256B301282EC00E625B3 /* SwiftPlayer */;
-			targetProxy = C0FFEE000000000000000004 /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
-
 /* Begin PBXProject section */
 		6BD32564301282EC00E625B3 /* Project object */ = {
 			isa = PBXProject;
@@ -205,6 +197,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C0FFEE000000000000000005 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6BD3256B301282EC00E625B3 /* SwiftPlayer */;
+			targetProxy = C0FFEE000000000000000004 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		6BD32575301282ED00E625B3 /* Debug */ = {
