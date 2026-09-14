@@ -1,3 +1,9 @@
+![Stars](https://img.shields.io/github/stars/scadavide55/SwiftPlayer)
+![Release](https://img.shields.io/github/v/release/scadavide55/SwiftPlayer)
+![Downloads](https://img.shields.io/github/downloads/scadavide55/SwiftPlayer/total)
+![macOS](https://img.shields.io/badge/macOS-13.0%2B-blue?logo=apple)
+![Swift](https://img.shields.io/badge/Swift-6.0-orange?logo=swift)
+![License](https://img.shields.io/github/license/scadavide55/SwiftPlayer)
 # SwiftPlayer
 
 A minimal, fully native video and audio player for macOS built entirely with SwiftUI and AVFoundation. No third-party dependencies—just Apple's own frameworks.
