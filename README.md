@@ -23,16 +23,23 @@ A minimal, fully native video and audio player for macOS built entirely with Swi
 2. Move it to your `Applications` folder.
 3. Launch it.
 
-The app is **ad-hoc signed** (it has no Apple Developer Team ID), so macOS cannot verify the developer and Gatekeeper will block the first launch with a message along the lines of *"Apple cannot check it for malicious software."* This is expected for an unsigned open-source build. Clear it with either of these two remedies:
+The app is **ad-hoc signed** (it has no Apple Developer Team ID), so macOS cannot verify the developer and Gatekeeper will block the first launch with a message along the lines of *"Apple cannot c[...]
 
-**Option A — Right-click to open**
+**Option A — System Settings (works on macOS 15+)**
+
+1. Launch the app and dismiss the Gatekeeper warning.
+2. Open **System Settings** → **Privacy & Security**.
+3. Scroll down and click **Open Anyway** next to SwiftPlayer.
+4. The app will open, and you can use it normally on all future launches.
+
+**Option B — Right-click to open (macOS 13–14 only)**
 
 1. In Finder, right-click (or Control-click) `SwiftPlayer.app` and choose **Open**.
 2. Click **Open** again in the confirmation dialog.
 
 macOS remembers the exception, so subsequent launches work normally by double-clicking.
 
-**Option B — Remove the quarantine attribute**
+**Option C — Remove the quarantine attribute (all versions)**
 
 ```sh
 xattr -dr com.apple.quarantine /Applications/SwiftPlayer.app
