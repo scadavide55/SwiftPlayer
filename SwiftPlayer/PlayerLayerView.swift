@@ -2,11 +2,12 @@ import SwiftUI
 import AVFoundation
 import AppKit
 
-/// A bare NSView backed by an AVPlayerLayer.
-/// We deliberately avoid AVPlayerView / AVKit's built-in controls so the
-/// only UI on screen is exactly what we draw ourselves.
 final class PlayerLayerNSView: NSView {
     let playerLayer = AVPlayerLayer()
+    
+    /// Called once the layer is set up and laid out, so we can hand it to a PiP controller.
+    var onLayerReady: ((AVPlayerLayer) -> Void)?
+    private var didNotifyLayerReady = false
     
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -24,15 +25,22 @@ final class PlayerLayerNSView: NSView {
     override func layout() {
         super.layout()
         playerLayer.frame = bounds
+        
+        if !didNotifyLayerReady, let onLayerReady {
+            didNotifyLayerReady = true
+            onLayerReady(playerLayer)
+        }
     }
 }
 
 struct PlayerLayerView: NSViewRepresentable {
     let player: AVPlayer
+    var onLayerReady: ((AVPlayerLayer) -> Void)?
     
     func makeNSView(context: Context) -> PlayerLayerNSView {
         let view = PlayerLayerNSView()
         view.playerLayer.player = player
+        view.onLayerReady = onLayerReady
         return view
     }
     
@@ -40,6 +48,6 @@ struct PlayerLayerView: NSViewRepresentable {
         if nsView.playerLayer.player !== player {
             nsView.playerLayer.player = player
         }
+        nsView.onLayerReady = onLayerReady
     }
 }
-

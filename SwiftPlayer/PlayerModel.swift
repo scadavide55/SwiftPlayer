@@ -110,17 +110,11 @@ private func parseASS(_ content: String) -> [SubtitleCue] {
             guard let r = Range(match.range(at: idx), in: line) else { return nil }
             return Int(line[r])
         }
-        // The fractional field is centiseconds in the canonical 2-digit form
-        // but milliseconds in the 3-digit form, so scale it by its width.
-        func fraction(_ idx: Int) -> Int? {
-            guard let r = Range(match.range(at: idx), in: line) else { return nil }
-            return milliseconds(fromFraction: String(line[r]))
-        }
-        guard let sh = value(1), let sm = value(2), let ss = value(3), let sms = fraction(4),
-              let eh = value(5), let em = value(6), let es = value(7), let ems = fraction(8) else { continue }
+        guard let sh = value(1), let sm = value(2), let ss = value(3), let scs = value(4),
+              let eh = value(5), let em = value(6), let es = value(7), let ecs = value(8) else { continue }
 
-        let start = timeToSeconds(sh, sm, ss, sms)
-        let end = timeToSeconds(eh, em, es, ems)
+        let start = timeToSeconds(sh, sm, ss, scs * 10)
+        let end = timeToSeconds(eh, em, es, ecs * 10)
 
         // Text is everything after the 9th comma-separated field.
         let fields = line.components(separatedBy: ",")
@@ -140,49 +134,65 @@ private func stripASSTags(_ text: String) -> String {
     return noOverrides.replacingOccurrences(of: #"\\N|\\n"#, with: "\n", options: .regularExpression)
 }
 
-/// ASS/SSA writes the fractional part of a timestamp as centiseconds (`H:MM:SS.cc`),
-/// but some tools emit milliseconds (`H:MM:SS.mmm`). Scale by the field's width so
-/// that both forms land on the correct time.
-private func milliseconds(fromFraction digits: String) -> Int? {
-    guard let value = Int(digits) else { return nil }
-    switch digits.count {
-    case 2: return value * 10 // centiseconds
-    case 3: return value // milliseconds
-    default: return nil
-    }
-}
-
 @MainActor
 final class PlayerModel: ObservableObject {
-    
+   
     @Published var isPlaying: Bool = false
     @Published var currentTime: Double = 0
     @Published var duration: Double = 0
     @Published var isScrubbing: Bool = false
+    @Published var currentFileName: String = ""
     @Published var subtitleCues: [SubtitleCue] = []
     @Published var subtitlesEnabled: Bool = false
     @Published var subtitleOffset: Double = 0.0
     @Published var currentSubtitleText: String = ""
     @Published var playbackFailed: Bool = false
-    
+    @Published var playbackFinished: Bool = false
+    @Published var playbackRate: Float = 1.0 {
+        didSet {
+            if !isFastSeeking {
+                player.rate = playbackRate
+            }
+        }
+    }
+
+    var isFastSeeking: Bool = false
+    @Published var volume: Float = 1.0 {
+        didSet {
+            player.volume = volume
+            if volume > 0 && isMuted { isMuted = false }
+        }
+    }
+
+    @Published var isMuted: Bool = false {
+        didSet { player.isMuted = isMuted }
+    }
     let player = AVPlayer()
     
     private var timeObserverToken: Any?
     private var itemStatusObservation: NSKeyValueObservation?
     private var itemDurationObservation: NSKeyValueObservation?
+    private var timeControlObservation: NSKeyValueObservation?
     
     init() {
-            let interval = CMTime(seconds: 1.0, preferredTimescale: 600)
-            timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    if !self.isScrubbing {
-                                        self.currentTime = time.seconds.isFinite ? time.seconds : 0
-                                    }
-                                    self.updateSubtitleDisplay()
+        let interval = CMTime(seconds: 1.0, preferredTimescale: 600)
+        timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if !self.isScrubbing {
+                    self.currentTime = time.seconds.isFinite ? time.seconds : 0
                 }
+                self.updateSubtitleDisplay()
             }
         }
+        
+        timeControlObservation = player.observe(\.timeControlStatus, options: [.new, .initial]) { [weak self] player, _ in
+            let isPlaying = player.timeControlStatus == .playing
+            Task { @MainActor [weak self] in
+                self?.isPlaying = isPlaying
+            }
+        }
+    }
     
     deinit {
         if let token = timeObserverToken {
@@ -196,75 +206,86 @@ final class PlayerModel: ObservableObject {
         isPlaying = false
         currentTime = 0
         duration = 0
-
+        playbackFinished = false
         let item = AVPlayerItem(url: url)
-
+        currentFileName = url.lastPathComponent
+        
         itemDurationObservation = item.observe(\.duration, options: [.new]) { item, _ in
-                    Task { @MainActor [weak self] in
-                        guard let self else { return }
-                        let seconds = item.duration.seconds
-                        self.duration = seconds.isFinite ? seconds : 0
-                    }
-                }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let seconds = item.duration.seconds
+                self.duration = seconds.isFinite ? seconds : 0
+            }
+        }
         
         itemStatusObservation = item.observe(\.status, options: [.new]) { item, _ in
-                    Task { @MainActor [weak self] in
-                        guard let self else { return }
-                        if item.status == .readyToPlay {
-                            self.player.play()
-                            self.isPlaying = true
-                        } else if item.status == .failed {
-                            self.playbackFailed = true
-                        }
-                    }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if item.status == .readyToPlay {
+                    self.player.play()
+                    self.isPlaying = true
+                } else if item.status == .failed {
+                    self.playbackFailed = true
                 }
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { _ in
+            Task { @MainActor [weak self] in
+                self?.playbackFinished = true
+            }
+        }
         player.replaceCurrentItem(with: item)
     }
     
     func togglePlayPause() {
-        if isPlaying {
+        if player.timeControlStatus == .playing {
             player.pause()
         } else {
-            player.play()
+            player.rate = playbackRate
         }
-        isPlaying.toggle()
     }
     
-    /// Starts real reverse playback when the current item supports it.
-    /// Returns `false` when it does not, so callers can fall back to
-    /// simulated reverse scrubbing.
-    func beginReversePlayback(rate: Float = -1.0) -> Bool {
-        guard isPlaying, let item = player.currentItem, item.canPlayReverse else { return false }
-        player.rate = rate
-        return true
+    func volumeUp() {
+        volume = min(volume + 0.05, 1.0)
     }
 
+    func volumeDown() {
+        volume = max(volume - 0.05, 0.0)
+    }
     func seek(to seconds: Double) {
         let time = CMTime(seconds: seconds, preferredTimescale: 600)
-        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
+        Task {
+            await player.seek(to: time)
+        }
         currentTime = seconds
+        
     }
     func loadSubtitles(url: URL) {
-                subtitleCues = parseSubtitles(from: url)
-                subtitlesEnabled = true
-            }
-
-            func updateSubtitleDisplay() {
-                guard subtitlesEnabled, !subtitleCues.isEmpty else {
-                    currentSubtitleText = ""
-                    return
-                }
-                let adjustedTime = currentTime - subtitleOffset
-                if let cue = subtitleCues.first(where: { adjustedTime >= $0.start && adjustedTime <= $0.end }) {
-                    currentSubtitleText = cue.text
-                } else {
-                    currentSubtitleText = ""
-                }
-            }
+        subtitleCues = parseSubtitles(from: url)
+        subtitlesEnabled = true
+    }
+    
+    func updateSubtitleDisplay() {
+        guard subtitlesEnabled, !subtitleCues.isEmpty else {
+            currentSubtitleText = ""
+            return
+        }
+        let adjustedTime = currentTime - subtitleOffset
+        if let cue = subtitleCues.first(where: { adjustedTime >= $0.start && adjustedTime <= $0.end }) {
+            currentSubtitleText = cue.text
+        } else {
+            currentSubtitleText = ""
+        }
+    }
     /// Call on window close / app termination to release decoder resources immediately.
     func teardown() {
         player.pause()
         player.replaceCurrentItem(with: nil)
+        playbackFinished = false
     }
 }
 

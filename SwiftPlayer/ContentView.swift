@@ -5,6 +5,7 @@ import AVFoundation
 
 struct ContentView: View {
     @StateObject private var model = PlayerModel()
+    @StateObject private var pipController = PiPController()
     @State private var hasLoadedFile: Bool = false
     
     @State private var controlsVisible: Bool = true
@@ -18,6 +19,7 @@ struct ContentView: View {
     @State private var fastSeekTimer: Timer?
     @State private var fastSeekDirection: Int = 0 // -1 backward, +1 forward
     @State private var showSubtitlePanel: Bool = false
+    @State private var isFullScreen: Bool = false
     var body: some View {
         Group {
             if hasLoadedFile {
@@ -42,13 +44,21 @@ struct ContentView: View {
         .onDisappear {
             model.teardown()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { _ in
+            isFullScreen = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { _ in
+            isFullScreen = false
+        }
     }
     
     private var playingState: some View {
             ZStack(alignment: .topLeading) {
                 ZStack(alignment: .bottom) {
-                    PlayerLayerView(player: model.player)
-                        .ignoresSafeArea()
+                    PlayerLayerView(player: model.player) { layer in
+                        pipController.attach(to: layer)
+                    }
+                    .ignoresSafeArea()
                     if !model.currentSubtitleText.isEmpty {
                                         Text(model.currentSubtitleText)
                                             .font(.system(size: 20, weight: .semibold))
@@ -79,7 +89,9 @@ struct ContentView: View {
                 .background(KeyEventHandlingView(
                     onSpace: { model.togglePlayPause() },
                     onArrowDown: { direction in handleArrowDown(direction: direction) },
-                    onArrowUp: { handleArrowUp() }
+                    onArrowUp: { handleArrowUp() },
+                    onVolumeUp: { model.volumeUp() },
+                    onVolumeDown: { model.volumeDown() }
                 ))
                 .onAppear {
                     registerActivity()
@@ -87,43 +99,54 @@ struct ContentView: View {
                 .animation(.easeInOut(duration: 0.25), value: controlsVisible)
 
                 if controlsVisible {
-                    Button {
-                        showHomeConfirm = true
-                    } label: {
-                        Image(systemName: "house")
-                            .font(.system(size: 16))
-                            .foregroundStyle(.white.opacity(0.85))
-                    }
-                    .buttonStyle(.plain)
-                    .padding(16)
-                    .popover(isPresented: $showHomeConfirm, arrowEdge: .bottom) {
-                        VStack(spacing: 12) {
-                            Text("Go back to file select screen?")
-                                .font(.callout)
-                                .multilineTextAlignment(.center)
-                                .frame(width: 220)
-
-                            VStack(spacing: 8) {
-                                Button("Yes") {
-                                    showHomeConfirm = false
-                                    goHome()
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .tint(.blue)
-                                .frame(maxWidth: .infinity)
-
-                                Button("No") {
-                                    showHomeConfirm = false
-                                }
-                                .buttonStyle(.bordered)
-                                .tint(.gray)
-                                .frame(maxWidth: .infinity)
-                            }
+                    HStack(spacing: 10) {
+                        Button {
+                            showHomeConfirm = true
+                        } label: {
+                            Image(systemName: "house")
+                                .font(.system(size: 16))
+                                .foregroundStyle(.white)
+                                .frame(width: 32, height: 32)
+                                .background(Circle().fill(Color.black.opacity(0.4)))
                         }
-                        .padding(16)
+                        .buttonStyle(.plain)
+                        .popover(isPresented: $showHomeConfirm, arrowEdge: .bottom) {
+                            VStack(spacing: 12) {
+                                Text("Go back to file select screen?")
+                                    .font(.callout)
+                                    .multilineTextAlignment(.center)
+                                    .frame(width: 220)
+
+                                VStack(spacing: 8) {
+                                    Button("Yes") {
+                                        showHomeConfirm = false
+                                        goHome()
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(.blue)
+                                    .frame(maxWidth: .infinity)
+
+                                    Button("No") {
+                                        showHomeConfirm = false
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .tint(.gray)
+                                    .frame(maxWidth: .infinity)
+                                }
+                            }
+                            .padding(16)
+                        }
+                        
+                        Text(model.currentFileName)
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.7))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                     }
+                    .padding(16)
+                      }
                 }
-            }
+            
             .alert("Couldn't play this file", isPresented: $model.playbackFailed) {
                             Button("OK") {
                                 goHome()
@@ -131,73 +154,139 @@ struct ContentView: View {
                         } message: {
                             Text("This file's format isn't supported.")
                         }
-                        .overlay(alignment: .topTrailing) {
-                if controlsVisible {
-                    Button {
-                        showSubtitlePanel = true
-                    } label: {
-                        Image(systemName: "captions.bubble")
-                            .font(.system(size: 16))
-                            .foregroundStyle(.white.opacity(0.85))
-                    }
-                    .buttonStyle(.plain)
-                    .padding(16)
-                    .popover(isPresented: $showSubtitlePanel, arrowEdge: .bottom) {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Button("Load Subtitles…") {
-                                openSubtitlePicker()
+                        .alert("Finished playing", isPresented: $model.playbackFinished) {
+                            Button("Go Home") {
+                                goHome()
                             }
+                            Button("Stay", role: .cancel) {
+                                model.seek(to: 0)
+                            }
+                        } message: {
+                            Text("Do you want to go back to the file select screen?")
+                        }
+                        .overlay(alignment: .topTrailing) {
+                            if controlsVisible {
+                                HStack(spacing: 8) {
+                                    Button {
+                                        toggleFullScreen()
+                                    } label: {
+                                        Image(systemName: isFullScreen
+                                              ? "arrow.down.right.and.arrow.up.left"
+                                              : "arrow.up.left.and.arrow.down.right")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundStyle(.white)
+                                            .frame(width: 32, height: 32)
+                                            .background(Circle().fill(Color.black.opacity(0.4)))
+                                    }
+                                    HStack(spacing: 8) {
+                                        Button {
+                                            pipController.toggle()
+                                        } label: {
+                                            Image(systemName: pipController.isActive ? "pip.exit" : "pip.enter")
+                                                .font(.system(size: 14, weight: .semibold))
+                                                .foregroundStyle(pipController.isPossible ? .white : .white.opacity(0.35))
+                                                .frame(width: 32, height: 32)
+                                                .background(Circle().fill(Color.black.opacity(0.4)))
+                                        }
+                                        .buttonStyle(.plain)
+                                        .disabled(!pipController.isPossible)
+                                        .help(pipController.isActive ? "Exit Picture in Picture" : "Enter Picture in Picture")
 
-                            Divider()
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help(isFullScreen ? "Exit Full Screen" : "Enter Full Screen")
 
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Subtitle Delay")
-                                    .font(.subheadline).bold()
-                                Text(String(format: "%+.1fs", model.subtitleOffset))
-                                    .font(.system(.body, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                                Slider(value: $model.subtitleOffset, in: -5...5, step: 0.5)
+                                    Button {
+                                        showSubtitlePanel = true
+                                    } label: {
+                                        Image(systemName: "captions.bubble")
+                                            .font(.system(size: 16))
+                                            .foregroundStyle(.white)
+                                            .frame(width: 32, height: 32)
+                                            .background(Circle().fill(Color.black.opacity(0.4)))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .buttonStyle(.plain)
+                                    .popover(isPresented: $showSubtitlePanel, arrowEdge: .bottom) {
+                                        VStack(alignment: .leading, spacing: 14) {
+                                            Button("Load Subtitles…") {
+                                                openSubtitlePicker()
+                                            }
+
+                                            Divider()
+
+                                            Toggle("Show Subtitles", isOn: $model.subtitlesEnabled)
+                                                .disabled(model.subtitleCues.isEmpty)
+
+                                            VStack(alignment: .leading, spacing: 6) {
+                                                Text("Subtitle Delay")
+                                                    .font(.subheadline).bold()
+                                                Text(String(format: "%+.1fs", model.subtitleOffset))
+                                                    .font(.system(.body, design: .monospaced))
+                                                    .foregroundStyle(.secondary)
+                                                Slider(value: $model.subtitleOffset, in: -5...5, step: 0.5)
+                                            }
+                                        }
+                                        .padding(16)
+                                        .frame(width: 260)
+                                    }
+                                }
+                                .padding(16)
                             }
                         }
-                        .padding(16)
-                        .frame(width: 260)
-                    }
-                }
-            }
         }
     private func goHome() {
-            model.teardown()
-            hasLoadedFile = false
-            model.playbackFailed = false
+        pipController.stop()
+        model.teardown()
+        hasLoadedFile = false
+        model.playbackFailed = false
+        model.currentFileName = ""
+        model.currentTime = 0
+        model.duration = 0
+        model.subtitleCues = []
+        model.subtitlesEnabled = false
+        model.subtitleOffset = 0.0
+        model.currentSubtitleText = ""
+    }
+    private func toggleFullScreen() {
+        NSApplication.shared.keyWindow?.toggleFullScreen(nil)
+    }
+    private func handleArrowDown(direction: Int) {
+        // If the fast-seek timer is already running, ignore further key repeats.
+        if fastSeekDirection == direction && fastSeekTimer != nil {
+            registerActivity()
+            return
         }
-
-        private func handleArrowDown(direction: Int) {
-            if fastSeekDirection != direction {
-                fastSeekDirection = direction
-                fastSeekTimer?.invalidate()
-                fastSeekTimer = Timer.scheduledTimer(withTimeInterval: 0.6, repeats: false) { _ in
-                    DispatchQueue.main.async {
-                        if direction > 0 {
-                            model.player.rate = 2.0
-                        } else if !model.beginReversePlayback() {
-                            // Fallback for items that can't play backwards:
-                            // simulated reverse via repeated backward jumps.
-                            startReverseScrub()
-                        }
-                    }
+        
+        fastSeekTimer?.invalidate()
+        fastSeekDirection = direction
+        
+        // Do one immediate 5-second jump.
+        registerActivity()
+        model.seek(to: model.currentTime + Double(direction) * 5)
+        
+        // Then after a short delay, start continuous fast-seek.
+        fastSeekTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: false) { _ in
+            DispatchQueue.main.async {
+                if direction > 0 {
+                    model.isFastSeeking = true
+                    model.player.rate = model.playbackRate * 4.0
+                } else {
+                    startReverseScrub()
                 }
             }
-            registerActivity()
-            model.seek(to: model.currentTime + Double(direction) * 5)
         }
+    }
+  
 
         private func handleArrowUp() {
             fastSeekTimer?.invalidate()
             fastSeekTimer = nil
             fastSeekDirection = 0
             stopReverseScrub()
-            if model.player.rate != 1.0 && model.isPlaying {
-                model.player.rate = 1.0
+            model.isFastSeeking = false
+            if model.isPlaying {
+                model.player.rate = model.playbackRate
             }
         }
 private func openSubtitlePicker() {
@@ -212,8 +301,6 @@ private func openSubtitlePicker() {
         }
     }
 
-        /// Fallback for items that don't support reverse playback: seek backwards
-        /// repeatedly instead of playing in reverse.
         private func startReverseScrub() {
             fastSeekTimer?.invalidate()
             fastSeekTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { _ in
@@ -322,12 +409,16 @@ struct KeyEventHandlingView: NSViewRepresentable {
     let onSpace: () -> Void
     let onArrowDown: (Int) -> Void // -1 left, +1 right
     let onArrowUp: () -> Void
+    let onVolumeUp: () -> Void
+    let onVolumeDown: () -> Void
 
     func makeNSView(context: Context) -> KeyCatcherView {
         let view = KeyCatcherView()
         view.onSpace = onSpace
         view.onArrowDown = onArrowDown
         view.onArrowUp = onArrowUp
+        view.onVolumeUp = onVolumeUp
+        view.onVolumeDown = onVolumeDown
         return view
     }
 
@@ -335,12 +426,16 @@ struct KeyEventHandlingView: NSViewRepresentable {
         nsView.onSpace = onSpace
         nsView.onArrowDown = onArrowDown
         nsView.onArrowUp = onArrowUp
+        nsView.onVolumeUp = onVolumeUp
+        nsView.onVolumeDown = onVolumeDown
     }
 
     final class KeyCatcherView: NSView {
         var onSpace: (() -> Void)?
         var onArrowDown: ((Int) -> Void)?
         var onArrowUp: (() -> Void)?
+        var onVolumeUp: (() -> Void)?
+        var onVolumeDown: (() -> Void)?
 
         override var acceptsFirstResponder: Bool { true }
 
@@ -357,6 +452,10 @@ struct KeyEventHandlingView: NSViewRepresentable {
                 onArrowDown?(-1)
             case 124: // right arrow
                 onArrowDown?(1)
+            case 126: // up arrow
+                onVolumeUp?()
+            case 125: // down arrow
+                onVolumeDown?()
             default:
                 super.keyDown(with: event)
             }
@@ -372,8 +471,7 @@ struct KeyEventHandlingView: NSViewRepresentable {
         }
 
         override func hitTest(_ point: NSPoint) -> NSView? {
-            nil // never intercept clicks/drags
+            nil
         }
     }
 }
-
