@@ -252,6 +252,7 @@ final class PlayerModel: ObservableObject {
 
     func play() {
         guard isLoading || player.currentItem?.status == .readyToPlay else { return }
+        endFastSeeking()
         playbackRequested = true
         if playbackFinished || (duration > 0 && currentTime >= duration) { seek(to: 0) }
         if player.currentItem?.status == .readyToPlay { player.rate = playbackRate }

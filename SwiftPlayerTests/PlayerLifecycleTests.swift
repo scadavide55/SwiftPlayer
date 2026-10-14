@@ -114,6 +114,20 @@ final class PlayerLifecycleTests: XCTestCase {
         XCTAssertEqual(model.player.rate, model.playbackRate)
     }
 
+    func testPlayCancelsAnActivePausedReverseHold() async throws {
+        let model = try await loadedPlayer()
+        defer { model.teardown() }
+        model.pause()
+        model.beginFastSeeking(direction: -1)
+        try await waitUntil { model.isFastSeeking }
+        model.togglePlayPause()
+        XCTAssertFalse(model.isFastSeeking)
+        XCTAssertTrue(model.playbackRequested)
+        try await waitUntil { model.isPlaying }
+        try await Task.sleep(for: .milliseconds(350))
+        XCTAssertGreaterThan(model.player.currentTime().seconds, 0.1)
+    }
+
     func testReleasingKeyBeforeHoldDoesNotStartFastSeeking() async throws {
         let model = try await loadedPlayer()
         defer { model.teardown() }
