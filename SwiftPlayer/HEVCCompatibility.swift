@@ -73,9 +73,15 @@ enum HEVCCompatibility {
                     try Task.checkCancellation()
                     // Keep fallback-copy memory bounded and cancellation responsive
                     // when the source is a multi-gigabyte file on another volume.
-                    let chunk = try source.read(upToCount: 4 * 1024 * 1024) ?? Data()
-                    if chunk.isEmpty { break }
-                    try copy.write(contentsOf: chunk)
+                    let reachedEnd = try autoreleasepool {
+                        // Foundation can autorelease read buffers until this worker
+                        // finishes. Drain them per chunk instead of per entire file.
+                        let chunk = try source.read(upToCount: 4 * 1024 * 1024) ?? Data()
+                        if chunk.isEmpty { return true }
+                        try copy.write(contentsOf: chunk)
+                        return false
+                    }
+                    if reachedEnd { break }
                 }
             }
             try Task.checkCancellation()

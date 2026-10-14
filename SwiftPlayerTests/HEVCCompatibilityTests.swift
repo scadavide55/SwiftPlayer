@@ -85,6 +85,38 @@ final class HEVCCompatibilityTests: XCTestCase {
         }
     }
 
+    func testLargeFallbackCopyReleasesReadBuffersBeforeReturning() async throws {
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
+        defer { try? FileManager.default.removeItem(at: source) }
+        let metadata = movie()
+        // A sparse 512 MiB mdat exercises many reads without a large fixture allocation.
+        try (metadata + Data([0x20, 0, 0, 0]) + Data("mdat".utf8)).write(to: source)
+        let file = try FileHandle(forWritingTo: source)
+        try file.truncate(atOffset: UInt64(metadata.count) + 512 * 1024 * 1024)
+        try file.close()
+        let growth = try await Task.detached {
+            let before = try Self.physicalFootprint()
+            let media = try HEVCCompatibility.prepare(url: source, allowClone: false)
+            defer { media.removeTemporaryFiles() }
+            let after = try Self.physicalFootprint()
+            return after > before ? after - before : 0
+        }.value
+        XCTAssertLessThan(growth, 64 * 1024 * 1024,
+                          "Fallback copying must release each read buffer, not retain the entire input.")
+    }
+
+    nonisolated private static func physicalFootprint() throws -> UInt64 {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) { pointer in
+            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        guard result == KERN_SUCCESS else { throw NSError(domain: NSMachErrorDomain, code: Int(result)) }
+        return info.phys_footprint
+    }
+
     func testNativeHEVCPlaybackAndSeekingAfterRetagging() async throws {
         let source = try await makeHEVCFixture()
         defer { try? FileManager.default.removeItem(at: source) }
