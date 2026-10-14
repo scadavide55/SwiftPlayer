@@ -24,7 +24,10 @@ final class PlayerLayerNSView: NSView {
     
     override func layout() {
         super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         playerLayer.frame = bounds
+        CATransaction.commit()
         
         if !didNotifyLayerReady, let onLayerReady {
             didNotifyLayerReady = true
@@ -49,5 +52,10 @@ struct PlayerLayerView: NSViewRepresentable {
             nsView.playerLayer.player = player
         }
         nsView.onLayerReady = onLayerReady
+    }
+
+    static func dismantleNSView(_ nsView: PlayerLayerNSView, coordinator: ()) {
+        nsView.onLayerReady = nil
+        nsView.playerLayer.player = nil
     }
 }

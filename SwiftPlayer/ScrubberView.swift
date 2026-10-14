@@ -7,7 +7,7 @@ struct ScrubberView: View {
     let onScrubEnd: (Double) -> Void
     
     private var progress: Double {
-        guard duration > 0 else { return 0 }
+        guard duration.isFinite, duration > 0, currentTime.isFinite else { return 0 }
         return min(max(currentTime / duration, 0), 1)
     }
     
@@ -27,11 +27,13 @@ struct ScrubberView: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
+                        guard geo.size.width > 0, duration.isFinite, duration > 0 else { return }
                         onScrubStart()
                         let fraction = min(max(value.location.x / geo.size.width, 0), 1)
                         currentTime = fraction * duration
                     }
                     .onEnded { value in
+                        guard geo.size.width > 0, duration.isFinite, duration > 0 else { return }
                         let fraction = min(max(value.location.x / geo.size.width, 0), 1)
                         onScrubEnd(fraction * duration)
                     }

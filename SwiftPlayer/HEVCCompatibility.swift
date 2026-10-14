@@ -15,7 +15,7 @@ struct PreparedMedia: Sendable {
 }
 
 enum HEVCCompatibility {
-    nonisolated static func prepare(url: URL) throws -> PreparedMedia {
+    nonisolated static func prepare(url: URL, allowClone: Bool = true) throws -> PreparedMedia {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         try Task.checkCancellation()
@@ -52,17 +52,41 @@ enum HEVCCompatibility {
         do {
             // APFS clones share storage with the source, making large 8K files cheap.
             // Other volumes fall back to a regular copy on this background worker.
-            let cloned = url.withUnsafeFileSystemRepresentation { sourcePath in
+            let cloned = allowClone && url.withUnsafeFileSystemRepresentation { sourcePath in
                 destination.withUnsafeFileSystemRepresentation { destinationPath in
                     guard let sourcePath, let destinationPath else { return false }
                     return clonefile(sourcePath, destinationPath, 0) == 0
                 }
             }
-            if !cloned { try FileManager.default.copyItem(at: url, to: destination) }
+            if cloned {
+                // A clone inherits source permissions, which may be read-only.
+                try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: destination.path)
+            } else {
+                guard FileManager.default.createFile(atPath: destination.path, contents: nil,
+                                                     attributes: [.posixPermissions: 0o600]) else {
+                    throw CocoaError(.fileWriteUnknown)
+                }
+                let copy = try FileHandle(forWritingTo: destination)
+                defer { try? copy.close() }
+                try source.seek(toOffset: 0)
+                while true {
+                    try Task.checkCancellation()
+                    // Keep fallback-copy memory bounded and cancellation responsive
+                    // when the source is a multi-gigabyte file on another volume.
+                    let chunk = try source.read(upToCount: 4 * 1024 * 1024) ?? Data()
+                    if chunk.isEmpty { break }
+                    try copy.write(contentsOf: chunk)
+                }
+            }
             try Task.checkCancellation()
-            let output = try FileHandle(forWritingTo: destination)
+            let output = try FileHandle(forUpdating: destination)
             defer { try? output.close() }
+            guard try output.seekToEnd() == length else { throw CocoaError(.fileReadCorruptFile) }
             for patch in patches {
+                try output.seek(toOffset: patch)
+                guard try output.read(upToCount: 4) == Data("hev1".utf8) else {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
                 try output.seek(toOffset: patch)
                 try output.write(contentsOf: Data("hvc1".utf8))
             }

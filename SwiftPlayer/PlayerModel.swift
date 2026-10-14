@@ -8,131 +8,6 @@ import Combine
 let supportedExtensions: [String] = [
     "mp4", "mov", "m4v", "mp3", "m4a", "aac", "wav", "aiff", "caf"
 ] // audio containers
-struct SubtitleCue {
-    let start: Double
-    let end: Double
-    let text: String
-}
-
-let supportedSubtitleExtensions: [String] = ["srt", "vtt", "ass", "ssa"]
-
-func parseSubtitles(from url: URL) -> [SubtitleCue] {
-    guard let content = try? String(contentsOf: url, encoding: .utf8) else { return [] }
-    let ext = url.pathExtension.lowercased()
-    switch ext {
-    case "srt":
-        return parseSRT(content)
-    case "vtt":
-        return parseVTT(content)
-    case "ass", "ssa":
-        return parseASS(content)
-    default:
-        return []
-    }
-}
-
-private func timeToSeconds(_ h: Int, _ m: Int, _ s: Int, _ ms: Int) -> Double {
-    Double(h) * 3600 + Double(m) * 60 + Double(s) + Double(ms) / 1000.0
-}
-
-private func parseSRT(_ content: String) -> [SubtitleCue] {
-    var cues: [SubtitleCue] = []
-    let blocks = content.components(separatedBy: "\n\n")
-    let timePattern = #"(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})"#
-    guard let regex = try? NSRegularExpression(pattern: timePattern) else { return [] }
-
-    for block in blocks {
-        let lines = block.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-        guard !lines.isEmpty else { continue }
-        for line in lines {
-            let range = NSRange(line.startIndex..., in: line)
-            if let match = regex.firstMatch(in: line, range: range) {
-                guard let lineIndex = lines.firstIndex(of: line) else { continue }
-                let textLines = lines[(lineIndex + 1)...]
-                let text = textLines.joined(separator: "\n")
-                if let start = extractTime(match, in: line, groups: 1...4),
-                   let end = extractTime(match, in: line, groups: 5...8) {
-                    cues.append(SubtitleCue(start: start, end: end, text: stripTags(text)))
-                }
-                break
-            }
-        }
-    }
-    return cues
-}
-
-private func extractTime(_ match: NSTextCheckingResult, in line: String, groups: ClosedRange<Int>) -> Double? {
-    func value(_ idx: Int) -> Int? {
-        guard let r = Range(match.range(at: idx), in: line) else { return nil }
-        return Int(line[r])
-    }
-    guard let h = value(groups.lowerBound),
-          let m = value(groups.lowerBound + 1),
-          let s = value(groups.lowerBound + 2),
-          let ms = value(groups.lowerBound + 3) else { return nil }
-    return timeToSeconds(h, m, s, ms)
-}
-
-private func parseVTT(_ content: String) -> [SubtitleCue] {
-    var cues: [SubtitleCue] = []
-    let blocks = content.components(separatedBy: "\n\n")
-    let timePattern = #"(\d{2}):(\d{2}):(\d{2})[.,](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[.,](\d{3})"#
-    guard let regex = try? NSRegularExpression(pattern: timePattern) else { return [] }
-
-    for block in blocks {
-        let lines = block.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-        guard !lines.isEmpty else { continue }
-        for (idx, line) in lines.enumerated() {
-            let range = NSRange(line.startIndex..., in: line)
-            if let match = regex.firstMatch(in: line, range: range) {
-                let text = lines[(idx + 1)...].joined(separator: "\n")
-                if let start = extractTime(match, in: line, groups: 1...4),
-                   let end = extractTime(match, in: line, groups: 5...8) {
-                    cues.append(SubtitleCue(start: start, end: end, text: stripTags(text)))
-                }
-                break
-            }
-        }
-    }
-    return cues
-}
-
-private func parseASS(_ content: String) -> [SubtitleCue] {
-    var cues: [SubtitleCue] = []
-    let lines = content.components(separatedBy: .newlines)
-    let timePattern = #"^Dialogue:\s*\d+,(\d+):(\d{2}):(\d{2})[.,](\d{2,3}),(\d+):(\d{2}):(\d{2})[.,](\d{2,3}),"#
-    guard let regex = try? NSRegularExpression(pattern: timePattern) else { return [] }
-
-    for line in lines where line.hasPrefix("Dialogue:") {
-        let range = NSRange(line.startIndex..., in: line)
-        guard let match = regex.firstMatch(in: line, range: range) else { continue }
-        func value(_ idx: Int) -> Int? {
-            guard let r = Range(match.range(at: idx), in: line) else { return nil }
-            return Int(line[r])
-        }
-        guard let sh = value(1), let sm = value(2), let ss = value(3), let scs = value(4),
-              let eh = value(5), let em = value(6), let es = value(7), let ecs = value(8) else { continue }
-
-        let start = timeToSeconds(sh, sm, ss, scs * 10)
-        let end = timeToSeconds(eh, em, es, ecs * 10)
-
-        // Text is everything after the 9th comma-separated field.
-        let fields = line.components(separatedBy: ",")
-        guard fields.count > 9 else { continue }
-        let text = fields[9...].joined(separator: ",")
-        cues.append(SubtitleCue(start: start, end: end, text: stripASSTags(text)))
-    }
-    return cues
-}
-
-private func stripTags(_ text: String) -> String {
-    text.replacingOccurrences(of: #"<[^>]+>"#, with: "", options: .regularExpression)
-}
-
-private func stripASSTags(_ text: String) -> String {
-    let noOverrides = text.replacingOccurrences(of: #"\{[^}]*\}"#, with: "", options: .regularExpression)
-    return noOverrides.replacingOccurrences(of: #"\\N|\\n"#, with: "\n", options: .regularExpression)
-}
 
 @MainActor
 final class PlayerModel: ObservableObject {
@@ -142,9 +17,23 @@ final class PlayerModel: ObservableObject {
     @Published var duration: Double = 0
     @Published var isScrubbing: Bool = false
     @Published var currentFileName: String = ""
-    @Published var subtitleCues: [SubtitleCue] = []
-    @Published var subtitlesEnabled: Bool = false
-    @Published var subtitleOffset: Double = 0.0
+    @Published var subtitleCues: [SubtitleCue] = [] {
+        didSet {
+            subtitleOrder = subtitleCues.indices.sorted { subtitleCues[$0].start < subtitleCues[$1].start }
+            var maximumEnd = -Double.infinity
+            subtitleMaximumEnds = subtitleOrder.map {
+                maximumEnd = max(maximumEnd, subtitleCues[$0].end)
+                return maximumEnd
+            }
+            updateSubtitleDisplay()
+        }
+    }
+    @Published var subtitlesEnabled: Bool = false {
+        didSet { updateSubtitleDisplay() }
+    }
+    @Published var subtitleOffset: Double = 0.0 {
+        didSet { updateSubtitleDisplay() }
+    }
     @Published var currentSubtitleText: String = ""
     @Published var playbackFailed: Bool = false
     @Published var playbackErrorMessage: String = ""
@@ -152,15 +41,25 @@ final class PlayerModel: ObservableObject {
     @Published var playbackFinished: Bool = false
     @Published var playbackRate: Float = 1.0 {
         didSet {
-            if !isFastSeeking {
+            guard playbackRate.isFinite, playbackRate > 0, playbackRate <= 4 else {
+                playbackRate = oldValue
+                return
+            }
+            if playbackRequested, player.currentItem?.status == .readyToPlay, !isFastSeeking {
                 player.rate = playbackRate
             }
         }
     }
 
-    var isFastSeeking: Bool = false
+    private(set) var isFastSeeking: Bool = false
+    @Published private(set) var playbackRequested: Bool = false
     @Published var volume: Float = 1.0 {
         didSet {
+            let clamped = volume.isFinite ? min(max(volume, 0), 1) : oldValue
+            if volume != clamped {
+                volume = clamped
+                return
+            }
             player.volume = volume
             if volume > 0 && isMuted { isMuted = false }
         }
@@ -181,35 +80,48 @@ final class PlayerModel: ObservableObject {
     private var scopedURL: URL?
     private var endObserver: NSObjectProtocol?
     private var failureObserver: NSObjectProtocol?
+    private var subtitleLoadTask: Task<Void, Never>?
+    private var subtitleLoadIdentifier = UUID()
+    private var subtitleMaximumEnds: [Double] = []
+    private var subtitleOrder: [Int] = []
+    private var fastSeekTask: Task<Void, Never>?
+    private var fastSeekDirection: Int?
+    private var seekIdentifier = UUID()
+    private var isSeeking = false
     
     init() {
-        let interval = CMTime(seconds: 1.0, preferredTimescale: 600)
-        timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+        let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
+        timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                if !self.isScrubbing {
-                    self.currentTime = time.seconds.isFinite ? time.seconds : 0
+                if !self.isScrubbing, !self.isSeeking, self.player.currentItem != nil {
+                    // Read current state when this callback reaches the main actor;
+                    // its supplied timestamp may belong to an item already replaced.
+                    let seconds = self.player.currentTime().seconds
+                    if seconds.isFinite { self.currentTime = max(0, seconds) }
                 }
                 self.updateSubtitleDisplay()
             }
         }
         
         timeControlObservation = player.observe(\.timeControlStatus, options: [.new, .initial]) { [weak self] player, _ in
-            let isPlaying = player.timeControlStatus == .playing
             Task { @MainActor [weak self] in
-                self?.isPlaying = isPlaying
+                self?.isPlaying = player.timeControlStatus == .playing
             }
         }
     }
     
     deinit {
         loadTask?.cancel()
+        subtitleLoadTask?.cancel()
+        fastSeekTask?.cancel()
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         if let failureObserver { NotificationCenter.default.removeObserver(failureObserver) }
         if let token = timeObserverToken {
             player.removeTimeObserver(token)
         }
         player.pause()
+        player.currentItem?.cancelPendingSeeks()
         player.replaceCurrentItem(with: nil)
         preparedMedia?.removeTemporaryFiles()
         scopedURL?.stopAccessingSecurityScopedResource()
@@ -222,12 +134,13 @@ final class PlayerModel: ObservableObject {
         playbackFailed = false
         playbackErrorMessage = ""
         isLoading = true
+        playbackRequested = true
         currentFileName = url.lastPathComponent
         if url.startAccessingSecurityScopedResource() { scopedURL = url }
         let identifier = loadIdentifier
         loadTask = Task { [weak self] in
             let worker = Task.detached(priority: .userInitiated) {
-                try HEVCCompatibility.prepare(url: url)
+                try await Self.prepareMedia(url: url)
             }
             do {
                 let media = try await withTaskCancellationHandler {
@@ -240,21 +153,36 @@ final class PlayerModel: ObservableObject {
                     return
                 }
                 self.preparedMedia = media
-                let asset = AVURLAsset(url: media.url)
-                // An item can play audio despite having an unsupported video track.
-                for track in try await asset.loadTracks(withMediaType: .video) {
-                    guard try await track.load(.isDecodable) else {
-                        throw NSError(domain: "SwiftPlayer", code: 1, userInfo: [
-                            NSLocalizedDescriptionKey: "macOS cannot decode this video's codec or resolution."
-                        ])
-                    }
-                }
-                guard self.loadIdentifier == identifier, !Task.isCancelled else { return }
-                self.attach(AVPlayerItem(asset: asset))
+                self.attach(AVPlayerItem(url: media.url))
+                self.loadTask = nil
             } catch {
                 guard let self, self.loadIdentifier == identifier, !Task.isCancelled else { return }
                 self.failPlayback(error)
             }
+        }
+    }
+
+    nonisolated private static func prepareMedia(url: URL) async throws -> PreparedMedia {
+        // Keep this access alive through asset inspection, even if the model closes.
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        let media = try HEVCCompatibility.prepare(url: url)
+        do {
+            let asset = AVURLAsset(url: media.url)
+            // An item can play audio despite having an unsupported video track.
+            for track in try await asset.loadTracks(withMediaType: .video) {
+                try Task.checkCancellation()
+                guard try await track.load(.isDecodable) else {
+                    throw NSError(domain: "SwiftPlayer", code: 1, userInfo: [
+                        NSLocalizedDescriptionKey: "macOS cannot decode this video's codec or resolution."
+                    ])
+                }
+            }
+            try Task.checkCancellation()
+            return media
+        } catch {
+            media.removeTemporaryFiles()
+            throw error
         }
     }
 
@@ -272,7 +200,7 @@ final class PlayerModel: ObservableObject {
                 guard let self, self.player.currentItem === item else { return }
                 if item.status == .readyToPlay {
                     self.isLoading = false
-                    self.player.rate = self.playbackRate
+                    if self.playbackRequested { self.player.rate = self.playbackRate }
                 } else if item.status == .failed {
                     self.failPlayback(item.error)
                 }
@@ -285,6 +213,11 @@ final class PlayerModel: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, self.player.currentItem === item else { return }
+                self.playbackRequested = false
+                self.endFastSeeking()
+                self.isPlaying = false
+                self.currentTime = self.duration
+                self.updateSubtitleDisplay()
                 self.playbackFinished = true
             }
         }
@@ -307,11 +240,21 @@ final class PlayerModel: ObservableObject {
     }
     
     func togglePlayPause() {
-        if player.timeControlStatus == .playing {
-            player.pause()
-        } else {
-            player.rate = playbackRate
-        }
+        playbackRequested ? pause() : play()
+    }
+
+    func pause() {
+        playbackRequested = false
+        endFastSeeking()
+        player.pause()
+        isPlaying = false
+    }
+
+    func play() {
+        guard isLoading || player.currentItem?.status == .readyToPlay else { return }
+        playbackRequested = true
+        if playbackFinished || (duration > 0 && currentTime >= duration) { seek(to: 0) }
+        if player.currentItem?.status == .readyToPlay { player.rate = playbackRate }
     }
     
     func volumeUp() {
@@ -322,16 +265,85 @@ final class PlayerModel: ObservableObject {
         volume = max(volume - 0.05, 0.0)
     }
     func seek(to seconds: Double) {
-        let time = CMTime(seconds: seconds, preferredTimescale: 600)
-        Task {
-            await player.seek(to: time)
+        guard seconds.isFinite, duration.isFinite, duration > 0,
+              let item = player.currentItem, item.status == .readyToPlay else { return }
+        let target = min(max(seconds, 0), duration)
+        seekIdentifier = UUID()
+        let identifier = seekIdentifier
+        item.cancelPendingSeeks()
+        isSeeking = true
+        currentTime = target
+        playbackFinished = false
+        updateSubtitleDisplay()
+        // Let AVFoundation choose a responsive seek position for ordinary playback.
+        // Sample-accurate seeks are reserved for explicit decoding tests.
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600)) { [weak self, weak item] finished in
+            Task { @MainActor [weak self, weak item] in
+                guard let self, let item, self.player.currentItem === item,
+                      self.seekIdentifier == identifier else { return }
+                self.isSeeking = false
+                if finished, !self.isScrubbing {
+                    let actual = self.player.currentTime().seconds
+                    if actual.isFinite { self.currentTime = max(0, actual) }
+                    self.updateSubtitleDisplay()
+                }
+            }
         }
-        currentTime = seconds
-        
     }
+
+    func beginFastSeeking(direction: Int) {
+        guard [-1, 1].contains(direction), player.currentItem?.status == .readyToPlay,
+              fastSeekDirection != direction else { return }
+        endFastSeeking()
+        fastSeekDirection = direction
+        seek(to: currentTime + Double(direction) * 5)
+        fastSeekTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(800))
+                try Task.checkCancellation()
+                self?.isFastSeeking = true
+                if direction > 0, self?.playbackRequested == true {
+                    if let rate = self?.playbackRate { self?.player.rate = rate * 4 }
+                    return
+                }
+                // Reverse scrubbing must not compete with normal forward playback.
+                self?.player.pause()
+                while !Task.isCancelled {
+                    guard let time = self?.currentTime else { return }
+                    self?.seek(to: time + Double(direction))
+                    try await Task.sleep(for: .milliseconds(200))
+                }
+            } catch { /* Releasing a key or closing playback cancels the hold. */ }
+        }
+    }
+
+    func endFastSeeking() {
+        fastSeekTask?.cancel()
+        fastSeekTask = nil
+        fastSeekDirection = nil
+        guard isFastSeeking else { return }
+        isFastSeeking = false
+        if playbackRequested, player.currentItem?.status == .readyToPlay {
+            player.rate = playbackRate
+        } else {
+            player.pause()
+        }
+    }
+
     func loadSubtitles(url: URL) {
-        subtitleCues = parseSubtitles(from: url)
-        subtitlesEnabled = true
+        subtitleLoadTask?.cancel()
+        subtitleLoadIdentifier = UUID()
+        let identifier = subtitleLoadIdentifier
+        subtitleLoadTask = Task { [weak self] in
+            let worker = Task.detached(priority: .userInitiated) { parseSubtitles(from: url) }
+            let cues = await withTaskCancellationHandler {
+                await worker.value
+            } onCancel: { worker.cancel() }
+            guard let self, self.subtitleLoadIdentifier == identifier, !Task.isCancelled else { return }
+            self.subtitleCues = cues
+            self.subtitlesEnabled = !cues.isEmpty
+            self.subtitleLoadTask = nil
+        }
     }
     
     func updateSubtitleDisplay() {
@@ -340,17 +352,37 @@ final class PlayerModel: ObservableObject {
             return
         }
         let adjustedTime = currentTime - subtitleOffset
-        if let cue = subtitleCues.first(where: { adjustedTime >= $0.start && adjustedTime <= $0.end }) {
-            currentSubtitleText = cue.text
-        } else {
-            currentSubtitleText = ""
+        // Prefix maximum end times support overlapping cues while skipping all
+        // expired entries in logarithmic time, including after backward seeks.
+        var lower = 0
+        var upper = subtitleMaximumEnds.count
+        while lower < upper {
+            let middle = lower + (upper - lower) / 2
+            if subtitleMaximumEnds[middle] < adjustedTime { lower = middle + 1 }
+            else { upper = middle }
         }
+        var text = ""
+        if lower < subtitleCues.count {
+            for index in subtitleOrder[lower...] {
+                let cue = subtitleCues[index]
+                if cue.start > adjustedTime { break }
+                if cue.end >= adjustedTime { text = cue.text; break }
+            }
+        }
+        if currentSubtitleText != text { currentSubtitleText = text }
     }
     /// Call on window close / app termination to release decoder resources immediately.
     func teardown() {
+        playbackRequested = false
+        endFastSeeking()
         loadIdentifier = UUID()
         loadTask?.cancel()
         loadTask = nil
+        subtitleLoadIdentifier = UUID()
+        subtitleLoadTask?.cancel()
+        subtitleLoadTask = nil
+        seekIdentifier = UUID()
+        isSeeking = false
         itemStatusObservation = nil
         itemDurationObservation = nil
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
@@ -358,6 +390,7 @@ final class PlayerModel: ObservableObject {
         endObserver = nil
         failureObserver = nil
         player.pause()
+        player.currentItem?.cancelPendingSeeks()
         player.replaceCurrentItem(with: nil)
         preparedMedia?.removeTemporaryFiles()
         preparedMedia = nil
@@ -366,17 +399,27 @@ final class PlayerModel: ObservableObject {
         isPlaying = false
         isLoading = false
         playbackFinished = false
+        playbackFailed = false
+        playbackErrorMessage = ""
+        isScrubbing = false
+        currentTime = 0
+        duration = 0
+        currentFileName = ""
+        subtitleCues = []
+        subtitlesEnabled = false
+        subtitleOffset = 0
+        currentSubtitleText = ""
     }
 }
 
 func formatTime(_ seconds: Double) -> String {
-    guard seconds.isFinite, seconds >= 0 else { return "0:00" }
+    guard seconds.isFinite, seconds >= 0, seconds < Double(Int.max) else { return "0:00" }
     let total = Int(seconds)
     let h = total / 3600
     let m = (total % 3600) / 60
     let s = total % 60
     if h > 0 {
-        return String(format: "%d:%02d:%02d", h, m, s)
+        return "\(h):" + String(format: "%02d:%02d", m, s)
     } else {
         return String(format: "%d:%02d", m, s)
     }

@@ -19,7 +19,7 @@ struct ControlsOverlay: View {
             Button {
                 model.togglePlayPause()
             } label: {
-                Image(systemName: model.isPlaying ? "pause.fill" : "play.fill")
+                    Image(systemName: model.playbackRequested ? "pause.fill" : "play.fill")
                     .font(.system(size: 16))
                     .foregroundStyle(.white)
                     .frame(width: 20, height: 20)

@@ -75,6 +75,26 @@ final class SubtitleParserTests: XCTestCase {
         XCTAssertEqual(cues[0].end, 2.5, accuracy: 0.0001)
     }
 
+    func testSRTHandlesWindowsNewlinesAndBOM() throws {
+        let cues = try parse("\u{feff}1\r\n00:00:01,000 --> 00:00:02,000\r\nFirst\r\n\r\n2\r\n00:00:03,000 --> 00:00:04,000\r\nSecond", as: "srt")
+        XCTAssertEqual(cues.map(\.text), ["First", "Second"])
+        XCTAssertEqual(cues.map(\.start), [1, 3])
+    }
+
+    func testVTTHandlesTimestampsWithoutHours() throws {
+        let cues = try parse("WEBVTT\n\n01:02.250 --> 01:04.500 align:start\nShort form", as: "vtt")
+        XCTAssertEqual(cues.count, 1)
+        XCTAssertEqual(cues[0].start, 62.25, accuracy: 0.0001)
+        XCTAssertEqual(cues[0].end, 64.5, accuracy: 0.0001)
+    }
+
+    func testUTF16Subtitle() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".srt")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try "1\n00:00:01,000 --> 00:00:02,000\n字幕".write(to: url, atomically: true, encoding: .utf16)
+        XCTAssertEqual(parseSubtitles(from: url).first?.text, "字幕")
+    }
+
     // MARK: - ASS / SSA
 
     func testASSParsesCentisecondsOverrideBlocksAndLineBreaks() throws {
@@ -147,5 +167,8 @@ final class SubtitleParserTests: XCTestCase {
         XCTAssertEqual(formatTime(3661), "1:01:01")
         XCTAssertEqual(formatTime(.infinity), "0:00")
         XCTAssertEqual(formatTime(-5), "0:00")
+        XCTAssertEqual(formatTime(.nan), "0:00")
+        XCTAssertEqual(formatTime(.greatestFiniteMagnitude), "0:00")
+        XCTAssertEqual(formatTime(9_000_000_000), "2500000:00:00")
     }
 }

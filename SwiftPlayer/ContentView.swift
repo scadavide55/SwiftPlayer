@@ -9,15 +9,14 @@ struct ContentView: View {
     @State private var hasLoadedFile: Bool = false
     
     @State private var controlsVisible: Bool = true
-    @State private var hideTimer: Timer?
+    @State private var hideTask: Task<Void, Never>?
+    @State private var isPointerInside = false
     
     @State private var pendingReplacementURL: URL?
     @State private var showReplaceConfirm: Bool = false
     
     @State private var isTargeted: Bool = false
     @State private var showHomeConfirm: Bool = false
-    @State private var fastSeekTimer: Timer?
-    @State private var fastSeekDirection: Int = 0 // -1 backward, +1 forward
     @State private var showSubtitlePanel: Bool = false
     @State private var isFullScreen: Bool = false
     var body: some View {
@@ -42,7 +41,18 @@ struct ContentView: View {
             Text("This will stop the current playback and load “\(url.lastPathComponent)”.")
         }
         .onDisappear {
+            stopInteractions()
+            pipController.detach()
             model.teardown()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            stopInteractions()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in
+            stopInteractions()
+        }
+        .onChange(of: isInteracting) { _ in
+            registerActivity()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { _ in
             isFullScreen = true
@@ -101,6 +111,16 @@ struct ContentView: View {
                 ))
                 .onAppear {
                     registerActivity()
+                }
+                .onHover { hovering in
+                    isPointerInside = hovering
+                    if hovering {
+                        registerActivity()
+                    } else {
+                        hideTask?.cancel()
+                        hideTask = nil
+                        NSCursor.setHiddenUntilMouseMoves(false)
+                    }
                 }
                 .animation(.easeInOut(duration: 0.25), value: controlsVisible)
 
@@ -241,61 +261,34 @@ struct ContentView: View {
                             }
                         }
         }
+    private var isInteracting: Bool {
+        model.isScrubbing || model.isLoading || model.playbackFailed || model.playbackFinished
+            || showSubtitlePanel || showHomeConfirm || showReplaceConfirm
+    }
+
     private func goHome() {
-        pipController.stop()
+        stopInteractions()
+        pipController.detach()
         model.teardown()
         hasLoadedFile = false
-        model.playbackFailed = false
-        model.currentFileName = ""
-        model.currentTime = 0
-        model.duration = 0
-        model.subtitleCues = []
-        model.subtitlesEnabled = false
-        model.subtitleOffset = 0.0
-        model.currentSubtitleText = ""
+        showSubtitlePanel = false
+        pendingReplacementURL = nil
     }
+
     private func toggleFullScreen() {
         NSApplication.shared.keyWindow?.toggleFullScreen(nil)
     }
-    private func handleArrowDown(direction: Int) {
-        // If the fast-seek timer is already running, ignore further key repeats.
-        if fastSeekDirection == direction && fastSeekTimer != nil {
-            registerActivity()
-            return
-        }
-        
-        fastSeekTimer?.invalidate()
-        fastSeekDirection = direction
-        
-        // Do one immediate 5-second jump.
-        registerActivity()
-        model.seek(to: model.currentTime + Double(direction) * 5)
-        
-        // Then after a short delay, start continuous fast-seek.
-        fastSeekTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: false) { _ in
-            DispatchQueue.main.async {
-                if direction > 0 {
-                    model.isFastSeeking = true
-                    model.player.rate = model.playbackRate * 4.0
-                } else {
-                    startReverseScrub()
-                }
-            }
-        }
-    }
-  
 
-        private func handleArrowUp() {
-            fastSeekTimer?.invalidate()
-            fastSeekTimer = nil
-            fastSeekDirection = 0
-            stopReverseScrub()
-            model.isFastSeeking = false
-            if model.isPlaying {
-                model.player.rate = model.playbackRate
-            }
-        }
-private func openSubtitlePicker() {
+    private func handleArrowDown(direction: Int) {
+        registerActivity()
+        model.beginFastSeeking(direction: direction)
+    }
+
+    private func handleArrowUp() {
+        model.endFastSeeking()
+    }
+
+    private func openSubtitlePicker() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
@@ -307,21 +300,9 @@ private func openSubtitlePicker() {
         }
     }
 
-        private func startReverseScrub() {
-            fastSeekTimer?.invalidate()
-            fastSeekTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { _ in
-                DispatchQueue.main.async {
-                    model.seek(to: max(model.currentTime - 1.0, 0))
-                }
-            }
-        }
-
-        private func stopReverseScrub() {
-            fastSeekTimer?.invalidate()
-            fastSeekTimer = nil
-        }
-    
     private func load(url: URL) {
+        stopInteractions()
+        pipController.stop()
         model.load(url: url)
         hasLoadedFile = true
         pendingReplacementURL = nil
@@ -351,19 +332,29 @@ private func openSubtitlePicker() {
     // MARK: - Idle / auto-hide logic
     
     private func registerActivity() {
-        if !controlsVisible {
-            controlsVisible = true
-        }
-        NSCursor.unhide()
-        
-        hideTimer?.invalidate()
-        hideTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { _ in
-            DispatchQueue.main.async {
-                controlsVisible = false
-                NSCursor.hide()
-            }
+        controlsVisible = true
+        NSCursor.setHiddenUntilMouseMoves(false)
+        hideTask?.cancel()
+        hideTask = nil
+        guard hasLoadedFile, !isInteracting else { return }
+        hideTask = Task { @MainActor in
+            do { try await Task.sleep(for: .seconds(5)) }
+            catch { return }
+            guard !Task.isCancelled, hasLoadedFile, !isInteracting, NSApplication.shared.isActive else { return }
+            controlsVisible = false
+            if isPointerInside { NSCursor.setHiddenUntilMouseMoves(true) }
+            hideTask = nil
         }
     }
+
+    private func stopInteractions() {
+        hideTask?.cancel()
+        hideTask = nil
+        model.endFastSeeking()
+        controlsVisible = true
+        NSCursor.setHiddenUntilMouseMoves(false)
+    }
+
 }
 
 /// Bridges raw NSView mouse-moved tracking into SwiftUI, since SwiftUI alone
@@ -380,6 +371,10 @@ struct MouseActivityTracker: NSViewRepresentable {
     
     func updateNSView(_ nsView: TrackingNSView, context: Context) {
         nsView.onActivity = onActivity
+    }
+
+    static func dismantleNSView(_ nsView: TrackingNSView, coordinator: ()) {
+        nsView.onActivity = nil
     }
     
     final class TrackingNSView: NSView {
@@ -436,6 +431,15 @@ struct KeyEventHandlingView: NSViewRepresentable {
         nsView.onVolumeDown = onVolumeDown
     }
 
+    static func dismantleNSView(_ nsView: KeyCatcherView, coordinator: ()) {
+        nsView.onArrowUp?()
+        nsView.onSpace = nil
+        nsView.onArrowDown = nil
+        nsView.onArrowUp = nil
+        nsView.onVolumeUp = nil
+        nsView.onVolumeDown = nil
+    }
+
     final class KeyCatcherView: NSView {
         var onSpace: (() -> Void)?
         var onArrowDown: ((Int) -> Void)?
@@ -450,10 +454,20 @@ struct KeyEventHandlingView: NSViewRepresentable {
             window?.makeFirstResponder(self)
         }
 
+        override func resignFirstResponder() -> Bool {
+            let resigned = super.resignFirstResponder()
+            if resigned { onArrowUp?() }
+            return resigned
+        }
+
         override func keyDown(with event: NSEvent) {
+            guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty else {
+                super.keyDown(with: event)
+                return
+            }
             switch event.keyCode {
             case 49: // space
-                onSpace?()
+                if !event.isARepeat { onSpace?() }
             case 123: // left arrow
                 onArrowDown?(-1)
             case 124: // right arrow

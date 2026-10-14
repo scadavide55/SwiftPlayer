@@ -1,5 +1,6 @@
 import XCTest
 import AVFoundation
+import Darwin
 @testable import SwiftPlayer
 
 @MainActor
@@ -67,6 +68,23 @@ final class HEVCCompatibilityTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: prepared.url.path))
     }
 
+    func testReadOnlySourceAndBoundedFallbackCopy() throws {
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
+        defer { try? FileManager.default.removeItem(at: source) }
+        let original = movie() + atom("mdat", Data(repeating: 42, count: 5 * 1024 * 1024))
+        try original.write(to: source)
+        try FileManager.default.setAttributes([.posixPermissions: 0o400], ofItemAtPath: source.path)
+        for allowClone in [false, true] {
+            let media = try HEVCCompatibility.prepare(url: source, allowClone: allowClone)
+            defer { media.removeTemporaryFiles() }
+            var expected = original
+            expected.replaceSubrange(try XCTUnwrap(expected.range(of: Data("hev1".utf8))), with: Data("hvc1".utf8))
+            XCTAssertEqual(try Data(contentsOf: media.url), expected)
+            XCTAssertEqual(try Data(contentsOf: source), original)
+            XCTAssertEqual(try FileManager.default.attributesOfItem(atPath: source.path)[.posixPermissions] as? Int, 0o400)
+        }
+    }
+
     func testNativeHEVCPlaybackAndSeekingAfterRetagging() async throws {
         let source = try await makeHEVCFixture()
         defer { try? FileManager.default.removeItem(at: source) }
@@ -86,6 +104,28 @@ final class HEVCCompatibilityTests: XCTestCase {
             throw XCTSkip("Set SWIFTPLAYER_TEST_MEDIA to exercise a local 8K file.")
         }
         try await verifyPlayback(URL(fileURLWithPath: path), expectedWidth: 8192, seekTime: 120)
+    }
+
+    func testLocal8KRepeatedPlaybackResourceRelease() async throws {
+        guard let path = ProcessInfo.processInfo.environment["SWIFTPLAYER_TEST_MEDIA"] else {
+            throw XCTSkip("Set SWIFTPLAYER_TEST_MEDIA to exercise repeated local 8K playback.")
+        }
+        var footprints: [UInt64] = []
+        for _ in 0..<4 {
+            try await verifyPlayback(URL(fileURLWithPath: path), expectedWidth: 8192, seekTime: 120)
+            try await Task.sleep(for: .milliseconds(300))
+            var info = task_vm_info_data_t()
+            var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+            let result = withUnsafeMutablePointer(to: &info) { pointer in
+                pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                    task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+                }
+            }
+            XCTAssertEqual(result, KERN_SUCCESS)
+            footprints.append(info.phys_footprint / (1024 * 1024))
+        }
+        // Record process footprint without treating framework caching as a leak.
+        print("8K process physical footprint after each teardown (MiB): \(footprints)")
     }
 
     func testNativeHVC1PlaybackUsesOriginalFile() async throws {

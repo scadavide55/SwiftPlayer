@@ -11,11 +11,7 @@ final class PiPController: NSObject, ObservableObject {
     
     /// Called by PlayerLayerView when its AVPlayerLayer is ready.
     func attach(to playerLayer: AVPlayerLayer) {
-        // Tear down any existing controller first.
-        controller?.stopPictureInPicture()
-        possibleObservation = nil
-        isActive = false
-        isPossible = false
+        detach()
         
         guard AVPictureInPictureController.isPictureInPictureSupported() else {
             return
@@ -32,6 +28,7 @@ final class PiPController: NSObject, ObservableObject {
         ) { [weak self] observedController, _ in
             let value = observedController.isPictureInPicturePossible
             Task { @MainActor [weak self] in
+                guard self?.controller === observedController else { return }
                 self?.isPossible = value
             }
         }
@@ -50,21 +47,44 @@ final class PiPController: NSObject, ObservableObject {
         controller?.stopPictureInPicture()
         isActive = false
     }
+
+    func detach() {
+        possibleObservation = nil
+        controller?.delegate = nil
+        controller?.stopPictureInPicture()
+        controller = nil
+        isActive = false
+        isPossible = false
+    }
+
+    deinit {
+        controller?.delegate = nil
+        controller?.stopPictureInPicture()
+    }
 }
 
 extension PiPController: AVPictureInPictureControllerDelegate {
     nonisolated func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
-        Task { @MainActor in self.isActive = true }
+        Task { @MainActor [weak self] in
+            guard let self, self.controller === controller else { return }
+            self.isActive = true
+        }
     }
     
     nonisolated func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
-        Task { @MainActor in self.isActive = false }
+        Task { @MainActor [weak self] in
+            guard let self, self.controller === controller else { return }
+            self.isActive = false
+        }
     }
     
     nonisolated func pictureInPictureController(
         _ controller: AVPictureInPictureController,
         failedToStartPictureInPictureWithError error: Error
     ) {
-        Task { @MainActor in self.isActive = false }
+        Task { @MainActor [weak self] in
+            guard let self, self.controller === controller else { return }
+            self.isActive = false
+        }
     }
 }
