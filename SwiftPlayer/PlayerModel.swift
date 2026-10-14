@@ -147,6 +147,8 @@ final class PlayerModel: ObservableObject {
     @Published var subtitleOffset: Double = 0.0
     @Published var currentSubtitleText: String = ""
     @Published var playbackFailed: Bool = false
+    @Published var playbackErrorMessage: String = ""
+    @Published var isLoading: Bool = false
     @Published var playbackFinished: Bool = false
     @Published var playbackRate: Float = 1.0 {
         didSet {
@@ -173,10 +175,16 @@ final class PlayerModel: ObservableObject {
     private var itemStatusObservation: NSKeyValueObservation?
     private var itemDurationObservation: NSKeyValueObservation?
     private var timeControlObservation: NSKeyValueObservation?
+    private var loadTask: Task<Void, Never>?
+    private var loadIdentifier = UUID()
+    private var preparedMedia: PreparedMedia?
+    private var scopedURL: URL?
+    private var endObserver: NSObjectProtocol?
+    private var failureObserver: NSObjectProtocol?
     
     init() {
         let interval = CMTime(seconds: 1.0, preferredTimescale: 600)
-        timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
+        timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 if !self.isScrubbing {
@@ -195,50 +203,107 @@ final class PlayerModel: ObservableObject {
     }
     
     deinit {
+        loadTask?.cancel()
+        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        if let failureObserver { NotificationCenter.default.removeObserver(failureObserver) }
         if let token = timeObserverToken {
             player.removeTimeObserver(token)
         }
+        player.pause()
+        player.replaceCurrentItem(with: nil)
+        preparedMedia?.removeTemporaryFiles()
+        scopedURL?.stopAccessingSecurityScopedResource()
     }
     
     func load(url: URL) {
-        // Release previous item's resources before attaching a new one.
-        player.pause()
-        isPlaying = false
+        teardown()
         currentTime = 0
         duration = 0
-        playbackFinished = false
-        let item = AVPlayerItem(url: url)
+        playbackFailed = false
+        playbackErrorMessage = ""
+        isLoading = true
         currentFileName = url.lastPathComponent
-        
-        itemDurationObservation = item.observe(\.duration, options: [.new]) { item, _ in
+        if url.startAccessingSecurityScopedResource() { scopedURL = url }
+        let identifier = loadIdentifier
+        loadTask = Task { [weak self] in
+            let worker = Task.detached(priority: .userInitiated) {
+                try HEVCCompatibility.prepare(url: url)
+            }
+            do {
+                let media = try await withTaskCancellationHandler {
+                    try await worker.value
+                } onCancel: {
+                    worker.cancel()
+                }
+                guard let self, self.loadIdentifier == identifier, !Task.isCancelled else {
+                    media.removeTemporaryFiles()
+                    return
+                }
+                self.preparedMedia = media
+                let asset = AVURLAsset(url: media.url)
+                // An item can play audio despite having an unsupported video track.
+                for track in try await asset.loadTracks(withMediaType: .video) {
+                    guard try await track.load(.isDecodable) else {
+                        throw NSError(domain: "SwiftPlayer", code: 1, userInfo: [
+                            NSLocalizedDescriptionKey: "macOS cannot decode this video's codec or resolution."
+                        ])
+                    }
+                }
+                guard self.loadIdentifier == identifier, !Task.isCancelled else { return }
+                self.attach(AVPlayerItem(asset: asset))
+            } catch {
+                guard let self, self.loadIdentifier == identifier, !Task.isCancelled else { return }
+                self.failPlayback(error)
+            }
+        }
+    }
+
+    private func attach(_ item: AVPlayerItem) {
+        itemDurationObservation = item.observe(\.duration, options: [.new, .initial]) { [weak self] item, _ in
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                guard let self, self.player.currentItem === item else { return }
                 let seconds = item.duration.seconds
                 self.duration = seconds.isFinite ? seconds : 0
             }
         }
         
-        itemStatusObservation = item.observe(\.status, options: [.new]) { item, _ in
+        itemStatusObservation = item.observe(\.status, options: [.new, .initial]) { [weak self] item, _ in
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                guard let self, self.player.currentItem === item else { return }
                 if item.status == .readyToPlay {
-                    self.player.play()
-                    self.isPlaying = true
+                    self.isLoading = false
+                    self.player.rate = self.playbackRate
                 } else if item.status == .failed {
-                    self.playbackFailed = true
+                    self.failPlayback(item.error)
                 }
             }
         }
-        NotificationCenter.default.addObserver(
+        endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: item,
             queue: .main
-        ) { _ in
+        ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.playbackFinished = true
+                guard let self, self.player.currentItem === item else { return }
+                self.playbackFinished = true
+            }
+        }
+        failureObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main
+        ) { [weak self] notification in
+            let error = notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
+            Task { @MainActor [weak self] in
+                guard let self, self.player.currentItem === item else { return }
+                self.failPlayback(error)
             }
         }
         player.replaceCurrentItem(with: item)
+    }
+
+    private func failPlayback(_ error: Error?) {
+        teardown()
+        playbackErrorMessage = error?.localizedDescription ?? "macOS could not decode this file."
+        playbackFailed = true
     }
     
     func togglePlayPause() {
@@ -283,8 +348,23 @@ final class PlayerModel: ObservableObject {
     }
     /// Call on window close / app termination to release decoder resources immediately.
     func teardown() {
+        loadIdentifier = UUID()
+        loadTask?.cancel()
+        loadTask = nil
+        itemStatusObservation = nil
+        itemDurationObservation = nil
+        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        if let failureObserver { NotificationCenter.default.removeObserver(failureObserver) }
+        endObserver = nil
+        failureObserver = nil
         player.pause()
         player.replaceCurrentItem(with: nil)
+        preparedMedia?.removeTemporaryFiles()
+        preparedMedia = nil
+        scopedURL?.stopAccessingSecurityScopedResource()
+        scopedURL = nil
+        isPlaying = false
+        isLoading = false
         playbackFinished = false
     }
 }

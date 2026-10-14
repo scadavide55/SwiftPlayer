@@ -59,6 +59,12 @@ struct ContentView: View {
                         pipController.attach(to: layer)
                     }
                     .ignoresSafeArea()
+                    if model.isLoading {
+                        ProgressView("Opening video…")
+                            .padding(16)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                     if !model.currentSubtitleText.isEmpty {
                                         Text(model.currentSubtitleText)
                                             .font(.system(size: 20, weight: .semibold))
@@ -152,7 +158,7 @@ struct ContentView: View {
                                 goHome()
                             }
                         } message: {
-                            Text("This file's format isn't supported.")
+                            Text(model.playbackErrorMessage)
                         }
                         .alert("Finished playing", isPresented: $model.playbackFinished) {
                             Button("Go Home") {
