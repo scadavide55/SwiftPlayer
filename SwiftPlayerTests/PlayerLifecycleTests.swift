@@ -1,6 +1,7 @@
 import XCTest
 import AVFoundation
 import AppKit
+import Combine
 @testable import SwiftPlayer
 
 @MainActor
@@ -136,6 +137,22 @@ final class PlayerLifecycleTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(900))
         XCTAssertFalse(model.isFastSeeking)
         XCTAssertEqual(model.player.rate, model.playbackRate)
+    }
+
+    func testReverseHoldAtStartDoesNotKeepSeekingTheSameFrame() async throws {
+        let model = try await loadedPlayer()
+        defer { model.teardown() }
+        model.pause()
+        model.seek(to: 0)
+        model.beginFastSeeking(direction: -1)
+        try await waitUntil { model.isFastSeeking }
+        try await Task.sleep(for: .milliseconds(250))
+        var changes = 0
+        let observer = model.$currentTime.dropFirst().sink { _ in changes += 1 }
+        defer { observer.cancel() }
+        try await Task.sleep(for: .milliseconds(650))
+        XCTAssertEqual(model.player.currentTime().seconds, 0, accuracy: 0.01)
+        XCTAssertEqual(changes, 0, "A held reverse key must stop decoding the same start frame repeatedly.")
     }
 
     func testHeldKeyDoesNotRetainModelAfterClose() async throws {

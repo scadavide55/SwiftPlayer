@@ -310,7 +310,8 @@ final class PlayerModel: ObservableObject {
                 // Reverse scrubbing must not compete with normal forward playback.
                 self?.player.pause()
                 while !Task.isCancelled {
-                    guard let time = self?.currentTime else { return }
+                    guard let time = self?.currentTime, let duration = self?.duration,
+                          direction < 0 ? time > 0 : time < duration else { return }
                     self?.seek(to: time + Double(direction))
                     try await Task.sleep(for: .milliseconds(200))
                 }
