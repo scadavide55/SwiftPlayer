@@ -69,8 +69,11 @@ final class MediaControlsTests: XCTestCase {
     func testExternalSelectionAndDetachClearAllFeatureState() {
         let model = PlayerModel()
         model.mediaControls.useExternalSubtitles(named: "Captions.srt")
+        model.mediaControls.audioSelection = "audio-0"
         XCTAssertEqual(model.mediaControls.subtitleSelection, "external")
         model.teardown()
+        XCTAssertEqual(model.mediaControls.subtitleSelection, "automatic")
+        XCTAssertEqual(model.mediaControls.audioSelection, "automatic")
         XCTAssertTrue(model.mediaControls.externalSubtitleName.isEmpty)
         XCTAssertTrue(model.mediaControls.embeddedText.isEmpty)
         XCTAssertTrue(model.mediaControls.streams.isEmpty)

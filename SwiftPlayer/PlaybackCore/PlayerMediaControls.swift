@@ -238,6 +238,8 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
         lastSavedTime = 0
         subtitleGroup = nil
         audioGroup = nil
+        subtitleSelection = preferences?.subtitlesByDefault == false ? "off" : "automatic"
+        audioSelection = "automatic"
         subtitleTracks = []
         audioTracks = []
         chapters = []
