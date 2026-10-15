@@ -62,7 +62,7 @@ final class PlayerModel: ObservableObject {
                 return
             }
             player.volume = volume
-            if volume > 0 && isMuted { isMuted = false }
+            if volume > 0 && oldValue.isFinite && isMuted { isMuted = false }
         }
     }
 

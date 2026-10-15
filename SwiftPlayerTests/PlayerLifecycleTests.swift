@@ -95,6 +95,21 @@ final class PlayerLifecycleTests: XCTestCase {
         XCTAssertEqual(model.player.volume, 0.95, accuracy: 0.001)
     }
 
+    func testInvalidVolumeChangesPreserveMuteAndTheLastValidVolume() {
+        let model = PlayerModel()
+        for volume: Float in [0.25, 0.5, 1] {
+            for invalid: Float in [.nan, .infinity, -.infinity] {
+                model.volume = volume
+                model.isMuted = true
+                model.volume = invalid
+                XCTAssertEqual(model.volume, volume)
+                XCTAssertEqual(model.player.volume, volume)
+                XCTAssertTrue(model.isMuted)
+                XCTAssertTrue(model.player.isMuted)
+            }
+        }
+    }
+
     func testPausingDuringLoadingPreventsAutoplay() async throws {
         let model = PlayerModel()
         defer { model.teardown() }
