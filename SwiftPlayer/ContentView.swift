@@ -4,7 +4,18 @@ import UniformTypeIdentifiers
 import AVFoundation
 
 struct ContentView: View {
-    @StateObject private var model = PlayerModel(preferences: PlayerPreferences.shared)
+    @StateObject private var menuState = PlayerMenuState(model: PlayerModel(preferences: PlayerPreferences.shared))
+
+    var body: some View {
+        if let model = menuState.model {
+            PlayerContentView(model: model, menuState: menuState)
+        }
+    }
+}
+
+private struct PlayerContentView: View {
+    @ObservedObject var model: PlayerModel
+    let menuState: PlayerMenuState
     @ObservedObject private var preferences = PlayerPreferences.shared
     @StateObject private var pipController = PiPController()
     @State private var hasLoadedFile: Bool = false
@@ -34,9 +45,9 @@ struct ContentView: View {
                 }
             }
         }
-        .focusedSceneValue(\.playerWindow, PlayerWindowContext(model: model, open: requestOpen,
+        .background(PlayerCommandFocus(context: PlayerWindowContext(menus: menuState, open: requestOpen,
             jump: { showJump = true }, information: { showInformation = true },
-            subtitles: openSubtitlePicker, appearance: { showAppearance = true }))
+            subtitles: openSubtitlePicker, appearance: { showAppearance = true })).equatable())
         .sheet(isPresented: $showAppearance) {
             VStack {
                 SubtitleAppearanceView(preferences: preferences)
