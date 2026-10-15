@@ -78,17 +78,17 @@ struct ControlsOverlay: View {
                             model.playbackRate = Float(rate)
                         } label: {
                             if Float(rate) == model.playbackRate {
-                                Label("\(rate, specifier: "%.2g")×", systemImage: "checkmark")
+                                Label(formatPlaybackRate(Float(rate)), systemImage: "checkmark")
                             } else {
-                                Text("\(rate, specifier: "%.2g")×")
+                                Text(formatPlaybackRate(Float(rate)))
                             }
                         }
                     }
                 } label: {
-                    Text("\(Double(model.playbackRate), specifier: "%.2g")×")
+                    Text(formatPlaybackRate(model.playbackRate))
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
                         .foregroundStyle(.white)
-                        .frame(width: 28)
+                        .frame(width: 40)
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()

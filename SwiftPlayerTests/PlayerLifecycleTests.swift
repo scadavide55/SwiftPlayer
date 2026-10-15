@@ -91,6 +91,21 @@ final class PlayerLifecycleTests: XCTestCase {
         XCTAssertEqual(model.player.rate, 0)
     }
 
+    func testNativePauseAtReadinessIsNotOverwrittenByInitialAutoplay() async throws {
+        let model = PlayerModel()
+        defer { model.teardown() }
+        for _ in 0..<40 {
+            model.load(url: source)
+            try await waitUntil { model.player.currentItem?.status == .readyToPlay && model.duration > 0 }
+            model.play()
+            model.player.pause()
+            try await waitUntil { !model.isLoading }
+            try await Task.sleep(for: .milliseconds(20))
+            XCTAssertEqual(model.player.rate, 0)
+            XCTAssertFalse(model.playbackRequested)
+        }
+    }
+
     func testNativePlayerControlsUpdatePlaybackIntentAndSelectedRate() async throws {
         let model = try await loadedPlayer()
         defer { model.teardown() }

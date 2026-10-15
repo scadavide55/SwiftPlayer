@@ -15,7 +15,11 @@ A minimal, fully native video and audio player for macOS built entirely with Swi
 - **HEVC compatibility** – MP4/MOV/M4V files tagged `hev1` with VPS/SPS/PPS in their movie metadata open through a temporary `hvc1` compatibility copy. This preserves the original file, compressed video, audio, resolution, and quality. APFS uses a space-efficient clone; other volumes may require a full temporary copy. Temporary files are removed when playback closes or the file is replaced.
 - **Intuitive controls** – Play/pause, scrubber with time display, and keyboard shortcuts
 - **Pitch-preserving speed changes** – Playback uses AVFoundation's spectral time-pitch algorithm to keep voices and music at their original pitch as speed changes.
-- **Subtitle support** – SRT, VTT, and ASS/SSA formats with adjustable delay
+- **Subtitle support** – Embedded text tracks plus SRT, VTT, and ASS/SSA files. Choose Off, Automatic, individual tracks, or an external file, and set a preferred language.
+- **Subtitle appearance** – Choose a font, size, text color, outline, background opacity, and position with a live preview.
+- **Audio languages** – Select an audio track or use a preferred language automatically.
+- **Navigation and preferences** – Jump to a time, navigate chapters, reopen recent files, and optionally remember volume, mute, and playback position.
+- **Media information** – Inspect codecs, resolution, frame rate, audio channels, and subtitle tracks from the Window menu.
 - **Minimal UI** – Clean interface that fades away when idle, keeps focus on your content
 - **Drag & drop** – Load media by dragging files directly onto the window
 - **Keyboard navigation** – Arrow keys for seeking (5-second jumps or continuous fast-forward/reverse), space to play/pause
@@ -113,6 +117,29 @@ app targets and runtime testing.
 The additional core matrix runs 100 scenario/input combinations. Its complete
 run requires both local media environment variables described above. See
 [the core review](CORE_REVIEW_100.md) for the verified fixes and coverage limits.
+
+## Playback menus and settings
+
+- **File → Open File…** (`⌘O`) or **Open Recent** opens one file. Recent files use read-only security-scoped bookmarks, with up to ten entries. A multiple-file queue is deferred.
+- **Playback → Jump to Time…** (`⌘J`) accepts seconds, minutes:seconds, or hours:minutes:seconds. Chapter navigation appears when the file supplies chapter titles. Changing position preserves pause.
+- **Audio → Audio track** selects an embedded audio track. The preferred language applies while the selector is Automatic.
+- **Subtitles → Subtitle track** offers Off, Automatic, embedded choices, and a loaded external file. Automatic prefers a full subtitle option in the preferred language, falling back to the first full option before forced-only captions. Explicit track choices take precedence over language preferences.
+- **Subtitles → Appearance and Fonts…** styles decoded text captions in the main window. The caption popover also offers external-file loading and external subtitle delay.
+- **Window → Media Information…** (`⌘I`) shows the current file's streams and duration.
+- **SwiftPlayer → Settings…** (`⌘,`) saves language and appearance preferences, controls whether volume/mute are remembered, and enables optional resume. Turning resume off clears saved positions. Positions near the start or end are not resumed.
+
+Preferences, recent-file references, and resume positions stay in local app storage.
+The main window uses decoded embedded text so appearance controls also work with
+tx3g captions. Picture in Picture uses native embedded captions and the system's
+appearance; external-file captions remain in the main window. Image-based or
+otherwise unsupported subtitle codecs still depend on AVFoundation support.
+
+For additional chapter, language, and paused-resume tests, the optional
+`scripts/make-playback-test-fixture.sh output.m4a` generator creates a small
+synthetic audio fixture using ffmpeg. Set
+`TEST_RUNNER_SWIFTPLAYER_TEST_CHAPTER_MEDIA` to the fixture's absolute path.
+ffmpeg is a fixture-generation tool only, not an application dependency.
+See [the controls review](PLAYER_CONTROLS_REVIEW.md) for validation and limits.
 
 ## Compatibility
 
