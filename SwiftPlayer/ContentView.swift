@@ -30,6 +30,8 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 480, minHeight: 320)
+        .background(PlayerWindowObserver(onFullScreenChanged: { isFullScreen = $0 },
+                                         onResignKey: { stopInteractions() }))
         .alert("Replace current video?", isPresented: $showReplaceConfirm, presenting: pendingReplacementURL) { url in
             Button("Replace", role: .destructive) {
                 load(url: url)
@@ -48,17 +50,8 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
             stopInteractions()
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in
-            stopInteractions()
-        }
         .onChange(of: isInteracting) { _ in
             registerActivity()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { _ in
-            isFullScreen = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { _ in
-            isFullScreen = false
         }
     }
     
