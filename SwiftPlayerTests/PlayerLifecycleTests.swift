@@ -272,6 +272,25 @@ final class PlayerLifecycleTests: XCTestCase {
         XCTAssertEqual(model.currentSubtitleText, "")
     }
 
+    func testInactiveSubtitlesDoNotPublishUnchangedTextEveryTick() {
+        let model = PlayerModel()
+        var changes: [String] = []
+        let observer = model.$currentSubtitleText.dropFirst().sink { changes.append($0) }
+        defer { observer.cancel() }
+        for _ in 0..<100 { model.updateSubtitleDisplay() }
+        XCTAssertTrue(changes.isEmpty)
+        model.subtitleCues = [SubtitleCue(start: 0, end: 20, text: "Caption")]
+        model.subtitlesEnabled = true
+        XCTAssertEqual(changes, ["Caption"])
+        model.subtitlesEnabled = false
+        for _ in 0..<100 { model.updateSubtitleDisplay() }
+        XCTAssertEqual(changes, ["Caption", ""])
+        model.subtitlesEnabled = true
+        model.subtitleCues = []
+        for _ in 0..<100 { model.updateSubtitleDisplay() }
+        XCTAssertEqual(changes, ["Caption", "", "Caption", ""])
+    }
+
     func testLoadingNewMediaClearsOldSubtitlesAndErrors() async throws {
         let model = PlayerModel()
         defer { model.teardown() }

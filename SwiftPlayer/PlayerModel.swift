@@ -352,7 +352,7 @@ final class PlayerModel: ObservableObject {
     
     func updateSubtitleDisplay() {
         guard subtitlesEnabled, !subtitleCues.isEmpty else {
-            currentSubtitleText = ""
+            if !currentSubtitleText.isEmpty { currentSubtitleText = "" }
             return
         }
         let adjustedTime = currentTime - subtitleOffset
