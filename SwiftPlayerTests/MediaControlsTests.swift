@@ -138,4 +138,25 @@ final class MediaControlsTests: XCTestCase {
         XCTAssertTrue(controls.subtitleTracks.isEmpty)
         XCTAssertTrue(controls.audioTracks.isEmpty)
     }
+    func testPausedResumeRestoresPositionWithoutStartingPlaybackWhenProvided() async throws {
+        guard let path = ProcessInfo.processInfo.environment["SWIFTPLAYER_TEST_CHAPTER_MEDIA"] else {
+            throw XCTSkip("Provide the synthetic chapter and language fixture.")
+        }
+        let source = URL(fileURLWithPath: path)
+        let settings = PlayerPreferences(defaults: defaults)
+        settings.resumePlayback = true
+        settings.savePosition(6, duration: 20, for: source)
+        let model = PlayerModel(preferences: settings)
+        defer { model.teardown() }
+        model.load(url: source)
+        model.pause()
+        try await wait { model.player.currentItem?.status == .readyToPlay && model.duration > 0 }
+        try await wait { abs(model.player.currentTime().seconds - 6) < 0.5 }
+        XCTAssertEqual(model.player.rate, 0)
+        settings.resumePlayback = false
+        model.load(url: source)
+        model.pause()
+        try await wait { model.player.currentItem?.status == .readyToPlay && model.duration > 0 }
+        XCTAssertLessThan(model.player.currentTime().seconds, 0.5)
+    }
 }

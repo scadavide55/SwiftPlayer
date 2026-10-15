@@ -258,6 +258,9 @@ final class PlayerModel: ObservableObject {
                 guard let self, self.player.currentItem === item else { return }
                 if item.status == .readyToPlay {
                     self.isLoading = false
+                    let seconds = item.duration.seconds
+                    if seconds.isFinite, seconds > 0 { self.duration = seconds }
+                    self.mediaControls.tick(time: self.player.currentTime().seconds, duration: self.duration)
                     if self.playbackRequested { self.player.rate = self.playbackRate }
                 } else if item.status == .failed {
                     self.failPlayback(item.error)
