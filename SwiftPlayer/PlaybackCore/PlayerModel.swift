@@ -403,6 +403,7 @@ final class PlayerModel: ObservableObject {
         subtitleLoadTask?.cancel()
         subtitleLoadIdentifier = UUID()
         let identifier = subtitleLoadIdentifier
+        let selectionRevision = mediaControls.subtitleSelectionRevision
         subtitleLoadTask = Task { [weak self] in
             let worker = Task.detached(priority: .userInitiated) { parseSubtitles(from: url) }
             let cues = await withTaskCancellationHandler {
@@ -411,7 +412,7 @@ final class PlayerModel: ObservableObject {
             guard let self, self.subtitleLoadIdentifier == identifier, !Task.isCancelled else { return }
             self.subtitleCues = cues
             self.subtitlesEnabled = !cues.isEmpty
-            if !cues.isEmpty { self.mediaControls.useExternalSubtitles(named: url.lastPathComponent) }
+            if !cues.isEmpty { self.mediaControls.useExternalSubtitles(named: url.lastPathComponent, activate: self.mediaControls.subtitleSelectionRevision == selectionRevision) }
             self.subtitleLoadTask = nil
         }
     }

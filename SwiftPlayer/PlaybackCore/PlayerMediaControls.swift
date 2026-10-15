@@ -32,7 +32,13 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
     @Published private(set) var embeddedText = ""
     @Published private(set) var isDiscovering = false
     @Published private(set) var informationError = ""
-    @Published var subtitleSelection = "automatic" { didSet { applySubtitleSelection() } }
+    private(set) var subtitleSelectionRevision = 0
+    @Published var subtitleSelection = "automatic" {
+        didSet {
+            if oldValue != subtitleSelection { subtitleSelectionRevision &+= 1 }
+            applySubtitleSelection()
+        }
+    }
     @Published var audioSelection = "automatic" { didSet { applyAudioSelection() } }
     @Published private(set) var externalSubtitleName = ""
     var nativeSubtitleRendering = false {
@@ -202,9 +208,9 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
         } else if let choice = audioTracks.first(where: { $0.id == audioSelection }) { item.select(choice.option, in: group) }
     }
 
-    func useExternalSubtitles(named name: String) {
+    func useExternalSubtitles(named name: String, activate: Bool = true) {
         externalSubtitleName = name
-        subtitleSelection = "external"
+        if activate { subtitleSelection = "external" }
     }
 
     func tick(time: Double, duration: Double) {
