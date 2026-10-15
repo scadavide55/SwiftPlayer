@@ -457,15 +457,21 @@ final class PlayerModel: ObservableObject {
         }
     }
 
-    func loadSubtitles(url: URL) {
+    var hasPendingSubtitleLoad: Bool { subtitleLoadTask != nil }
+
+    func loadSubtitles(url: URL, accessing folder: URL? = nil) {
         subtitleLoadTask?.cancel()
         subtitleLoadIdentifier = UUID()
         let identifier = subtitleLoadIdentifier
         let selectionRevision = mediaControls.subtitleSelectionRevision
         subtitleLoadTask = Task { [weak self] in
             let worker = Task.detached(priority: .userInitiated) {
+                let folderScoped = folder?.startAccessingSecurityScopedResource() ?? false
                 let scoped = url.startAccessingSecurityScopedResource()
-                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                defer {
+                    if scoped { url.stopAccessingSecurityScopedResource() }
+                    if folderScoped { folder?.stopAccessingSecurityScopedResource() }
+                }
                 return (parseSubtitles(from: url), SubtitleFileReference.capture(url))
             }
             let (cues, reference) = await withTaskCancellationHandler {

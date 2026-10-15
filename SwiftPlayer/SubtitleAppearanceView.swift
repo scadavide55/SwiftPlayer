@@ -103,6 +103,7 @@ struct PlayerPreferencesView: View {
                     Text("Turning resume off clears saved playback positions.").font(.caption).foregroundStyle(.secondary)
                 }
             }.formStyle(.grouped).tabItem { Label("General", systemImage: "gearshape") }
+            SubtitleSearchSettingsView(preferences: preferences).tabItem { Label("Subtitle Files", systemImage: "folder") }
             SubtitleAppearanceView(preferences: preferences).tabItem { Label("Subtitle Appearance", systemImage: "textformat") }
         }.padding(12).frame(width: 510, height: 490)
     }

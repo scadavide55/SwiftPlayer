@@ -6,7 +6,7 @@ struct SubtitleCue: Sendable {
     let text: String
 }
 
-let supportedSubtitleExtensions: [String] = ["srt", "vtt", "ass", "ssa"]
+nonisolated let supportedSubtitleExtensions: [String] = ["srt", "vtt", "ass", "ssa"]
 
 nonisolated func parseSubtitles(from url: URL) -> [SubtitleCue] {
     let scoped = url.startAccessingSecurityScopedResource()

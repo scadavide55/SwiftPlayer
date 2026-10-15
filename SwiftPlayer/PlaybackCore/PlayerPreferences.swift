@@ -36,6 +36,7 @@ final class PlayerPreferences: ObservableObject {
     @Published var limitAudioPeaks: Bool { didSet { defaults.set(limitAudioPeaks, forKey: "limitAudioPeaks") } }
     @Published var normalizeAudio: Bool { didSet { defaults.set(normalizeAudio, forKey: "normalizeAudio") } }
     @Published var rememberVolume: Bool { didSet { defaults.set(rememberVolume, forKey: "rememberVolume") } }
+    @Published var autoFindSubtitles: Bool { didSet { defaults.set(autoFindSubtitles, forKey: "autoFindSubtitles") } }
     @Published var rememberFileSettings: Bool {
         didSet {
             defaults.set(rememberFileSettings, forKey: "rememberFileSettings")
@@ -74,6 +75,7 @@ final class PlayerPreferences: ObservableObject {
         limitAudioPeaks = defaults.object(forKey: "limitAudioPeaks") as? Bool ?? true
         normalizeAudio = defaults.object(forKey: "normalizeAudio") as? Bool ?? false
         rememberVolume = defaults.object(forKey: "rememberVolume") as? Bool ?? true
+        autoFindSubtitles = defaults.object(forKey: "autoFindSubtitles") as? Bool ?? true
         rememberFileSettings = defaults.object(forKey: "rememberFileSettings") as? Bool ?? true
         afterPlayback = EndOfPlaybackAction(rawValue: defaults.string(forKey: "afterPlayback") ?? "") ?? .stay
         resumePlayback = defaults.object(forKey: "resumePlayback") as? Bool ?? false

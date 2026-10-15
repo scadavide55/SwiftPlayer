@@ -18,6 +18,9 @@ private struct PlayerContentView: View {
     let menuState: PlayerMenuState
     @ObservedObject private var preferences = PlayerPreferences.shared
     @StateObject private var pipController = PiPController()
+    @StateObject private var subtitleSearch = SubtitleSearchController()
+    @ObservedObject private var subtitleFolders = SubtitleFolderStore.shared
+    @State private var showSubtitleMatches = false
     @State private var hasLoadedFile: Bool = false
     
     @State private var controlsVisible: Bool = true
@@ -47,12 +50,18 @@ private struct PlayerContentView: View {
         }
         .background(PlayerCommandFocus(context: PlayerWindowContext(menus: menuState, open: requestOpen,
             jump: { showJump = true }, information: { showInformation = true },
-            subtitles: openSubtitlePicker, appearance: { showAppearance = true })).equatable())
+            subtitles: openSubtitlePicker, findSubtitles: {
+                showSubtitleMatches = true
+                startSubtitleSearch(automatic: false)
+            }, appearance: { showAppearance = true })).equatable())
         .sheet(isPresented: $showAppearance) {
             VStack {
                 SubtitleAppearanceView(preferences: preferences)
                 Button("Done") { showAppearance = false }.keyboardShortcut(.defaultAction).padding(.bottom, 12)
             }
+        }
+        .sheet(isPresented: $showSubtitleMatches) {
+            SubtitleMatchesView(search: subtitleSearch) { model.loadSubtitles(url: $0.url, accessing: $0.folder) }
         }
         .sheet(isPresented: $showJump) { JumpToTimeView(duration: model.duration) { model.seek(to: $0) } }
         .sheet(isPresented: $showInformation) { MediaInformationView(model: model, media: model.mediaControls) }
@@ -61,6 +70,10 @@ private struct PlayerContentView: View {
                 RecentMediaStore.shared.record(url)
             }
         }
+        .onChange(of: model.sourceURL) { _ in startSubtitleSearch(automatic: true) }
+        .onChange(of: subtitleFolders.entries.map(\.id)) { _ in startSubtitleSearch(automatic: !showSubtitleMatches) }
+        .onChange(of: preferences.autoFindSubtitles) { _ in startSubtitleSearch(automatic: true) }
+        .onChange(of: preferences.subtitleLanguage) { _ in startSubtitleSearch(automatic: true) }
         .onChange(of: model.closedAtEnd) { closed in if closed { goHome() } }
         .onChange(of: pipController.isActive) { active in model.mediaControls.nativeSubtitleRendering = active }
         .frame(minWidth: 480, minHeight: 320)
@@ -77,6 +90,7 @@ private struct PlayerContentView: View {
             Text("This will stop the current playback and load “\(url.lastPathComponent)”.")
         }
         .onDisappear {
+            subtitleSearch.cancel()
             stopInteractions()
             pipController.detach()
             model.teardown()
@@ -282,6 +296,14 @@ private struct PlayerContentView: View {
 
     private func handleArrowUp() {
         model.endFastSeeking()
+    }
+
+    private func startSubtitleSearch(automatic: Bool) {
+        subtitleSearch.cancel()
+        guard model.sourceURL != nil else { showSubtitleMatches = false; return }
+        guard !automatic || preferences.autoFindSubtitles else { return }
+        let languages = preferences.subtitleLanguage.isEmpty ? Locale.preferredLanguages : [preferences.subtitleLanguage]
+        subtitleSearch.start(model: model, folders: subtitleFolders.entries, languages: languages, automatic: automatic)
     }
 
     private func openSubtitlePicker() {

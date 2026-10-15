@@ -9,6 +9,7 @@ struct PlayerWindowContext: Equatable {
     let jump: () -> Void
     let information: () -> Void
     let subtitles: () -> Void
+    let findSubtitles: () -> Void
     let appearance: () -> Void
 
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.menus === rhs.menus }
@@ -66,7 +67,7 @@ struct PlayerCommands: Commands {
         }
         CommandMenu("Subtitles") {
             SubtitlesMenu(state: window?.menus ?? inactive, preferences: preferences,
-                          load: { window?.subtitles() }, appearance: { window?.appearance() })
+                          load: { window?.subtitles() }, find: { window?.findSubtitles() }, appearance: { window?.appearance() })
                 .disabled(window == nil)
         }
         CommandGroup(after: .windowArrangement) {
@@ -133,6 +134,7 @@ struct SubtitlesMenu: View {
     @ObservedObject var state: PlayerMenuState
     @ObservedObject var preferences: PlayerPreferences
     let load: () -> Void
+    let find: () -> Void
     let appearance: () -> Void
     var body: some View {
         Picker("Subtitle Track", selection: Binding(get: { state.snapshot.subtitleSelection }, set: { state.model?.mediaControls.subtitleSelection = $0 })) {
@@ -144,9 +146,17 @@ struct SubtitlesMenu: View {
             }
         }.disabled(!state.snapshot.hasMedia)
         Button("Load Subtitle File…", action: load).disabled(!state.snapshot.hasMedia)
+        Button("Find Matching Subtitles…", action: find).disabled(!state.snapshot.hasMedia)
         LanguagePreferencePicker(title: "Preferred Language", selection: $preferences.subtitleLanguage)
         Divider()
         Button("Appearance and Fonts…", action: appearance)
+        Divider()
+        Button("Subtitles Earlier") { state.model?.subtitleOffset -= 0.1 }
+            .keyboardShortcut(.leftArrow, modifiers: [.option]).disabled(!state.snapshot.hasMedia)
+        Button("Subtitles Later") { state.model?.subtitleOffset += 0.1 }
+            .keyboardShortcut(.rightArrow, modifiers: [.option]).disabled(!state.snapshot.hasMedia)
+        Button("Reset Subtitle Timing") { state.model?.subtitleOffset = 0 }
+            .disabled(!state.snapshot.hasMedia || state.snapshot.subtitleDelay == 0)
     }
 }
 

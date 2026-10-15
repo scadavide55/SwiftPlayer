@@ -29,6 +29,7 @@ final class PlayerMenuStateTests: XCTestCase {
             model.currentSubtitleText = "Caption \(round)"
             model.mediaControls.legibleOutput(output, didOutputAttributedStrings: [NSAttributedString(string: "Embedded \(round)")],
                 nativeSampleBuffers: [], forItemTime: CMTime(seconds: Double(round), preferredTimescale: 600))
+            model.mediaControls.tick(time: Double(round), duration: 200)
             await settle()
         }
         XCTAssertGreaterThanOrEqual(playbackChanges, 200, "The live player must still deliver time and caption updates")
@@ -59,7 +60,7 @@ final class PlayerMenuStateTests: XCTestCase {
         weak var weakModel = model
         weak var weakState = state
         func context(_ menus: PlayerMenuState) -> PlayerWindowContext {
-            PlayerWindowContext(menus: menus, open: { _ in }, jump: {}, information: {}, subtitles: {}, appearance: {})
+            PlayerWindowContext(menus: menus, open: { _ in }, jump: {}, information: {}, subtitles: {}, findSubtitles: {}, appearance: {})
         }
         XCTAssertEqual(context(state!), context(state!))
         XCTAssertNotEqual(context(state!), context(PlayerMenuState(model: PlayerModel())))
