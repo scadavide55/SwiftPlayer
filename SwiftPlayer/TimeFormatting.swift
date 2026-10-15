@@ -12,3 +12,7 @@ func formatTime(_ seconds: Double) -> String {
         return String(format: "%d:%02d", m, s)
     }
 }
+
+func formatPlaybackRate(_ rate: Float) -> String {
+    String(format: "%g×", rate)
+}
