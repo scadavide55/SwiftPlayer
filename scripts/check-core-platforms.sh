@@ -20,7 +20,10 @@ check_core() {
         -enable-upcoming-feature InferIsolatedConformances \
         -enable-upcoming-feature GlobalActorIsolatedTypesUsability \
         -target "$core_target" -sdk "$core_sdk_path" \
+        -import-objc-header "$core_repo_root/SwiftPlayer/PlaybackCore/AudioGain/AudioGain.h" \
         -module-cache-path "$core_check_cache/$core_label" "${core_sources[@]}"
+    xcrun clang -fsyntax-only -std=c11 -target "$core_target" -isysroot "$core_sdk_path" \
+        "$core_repo_root/SwiftPlayer/PlaybackCore/AudioGain/AudioGain.c"
     printf '%s: PASS\n' "$core_label"
 }
 

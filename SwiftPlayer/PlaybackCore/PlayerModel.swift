@@ -54,21 +54,28 @@ final class PlayerModel: ObservableObject {
 
     private(set) var isFastSeeking: Bool = false
     @Published private(set) var playbackRequested: Bool = false
+    @Published private(set) var maximumVolume: Float = 2
+    private let audioGain = AudioGainController()
+    private var maximumVolumeObservation: AnyCancellable?
     @Published var volume: Float = 1.0 {
         didSet {
-            let clamped = volume.isFinite ? min(max(volume, 0), 1) : oldValue
+            let clamped = volume.isFinite ? min(max(volume, 0), maximumVolume) : oldValue
             if volume != clamped {
                 volume = clamped
                 return
             }
-            if player.volume != volume { player.volume = volume }
-            if !isSynchronizingAudioState, volume > 0, oldValue.isFinite, isMuted { isMuted = false }
+            audioGain.setVolume(volume)
+            let nativeVolume = min(volume, 1)
+            if player.volume != nativeVolume { player.volume = nativeVolume }
+            if volume == 0 { isMuted = true }
+            else if !isSynchronizingAudioState, oldValue.isFinite, isMuted { isMuted = false }
             if preferences?.rememberVolume == true { preferences?.savedVolume = volume }
         }
     }
 
     @Published var isMuted: Bool = false {
         didSet {
+            if volume == 0, !isMuted { isMuted = true; return }
             if player.isMuted != isMuted { player.isMuted = isMuted }
             if preferences?.rememberVolume == true { preferences?.savedMute = isMuted }
         }
@@ -106,11 +113,23 @@ final class PlayerModel: ObservableObject {
         self.preferences = preferences
         mediaControls = PlayerMediaControls(player: nativePlayer, preferences: preferences)
         mediaControls.onSeek = { [weak self] time in self?.seek(to: time) }
+        maximumVolume = preferences?.maximumVolume ?? 2
+        maximumVolumeObservation = preferences?.$maximumVolume.removeDuplicates().sink { [weak self] limit in
+            guard let self, limit.isFinite else { return }
+            let limit = min(max(limit, 1), 4)
+            self.maximumVolume = limit
+            if self.volume > limit {
+                self.isSynchronizingAudioState = true
+                self.volume = limit
+                self.isSynchronizingAudioState = false
+            }
+        }
         if let preferences, preferences.rememberVolume {
             volume = preferences.savedVolume
             isMuted = preferences.savedMute
-            player.volume = volume
-            player.isMuted = isMuted
+            player.volume = min(volume, 1)
+            audioGain.setVolume(volume)
+            player.isMuted = isMuted || volume == 0
         }
         let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
         timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] _ in
@@ -169,7 +188,7 @@ final class PlayerModel: ObservableObject {
         // policy reserved for volume changes requested through this model.
         isSynchronizingAudioState = true
         defer { isSynchronizingAudioState = false }
-        if volume != player.volume { volume = player.volume }
+        if min(volume, 1) != player.volume { volume = player.volume }
         if isMuted != player.isMuted { isMuted = player.isMuted }
     }
     
@@ -214,8 +233,15 @@ final class PlayerModel: ObservableObject {
                     media.removeTemporaryFiles()
                     return
                 }
+                let item = AVPlayerItem(url: media.url)
+                do { item.audioMix = try await self.audioGain.makeMix(for: item.asset) }
+                catch { media.removeTemporaryFiles(); throw error }
+                guard self.loadIdentifier == identifier, !Task.isCancelled else {
+                    media.removeTemporaryFiles()
+                    return
+                }
                 self.preparedMedia = media
-                self.attach(AVPlayerItem(url: media.url), sourceURL: url)
+                self.attach(item, sourceURL: url)
                 self.loadTask = nil
             } catch {
                 guard let self, self.loadIdentifier == identifier, !Task.isCancelled else { return }
@@ -333,11 +359,11 @@ final class PlayerModel: ObservableObject {
     }
     
     func volumeUp() {
-        volume = min(volume + 0.05, 1.0)
+        volume = min((volume * 1_000_000 + 50_000).rounded() / 1_000_000, maximumVolume)
     }
 
     func volumeDown() {
-        volume = max(volume - 0.05, 0.0)
+        volume = max((volume * 1_000_000 - 50_000).rounded() / 1_000_000, 0)
     }
     func seek(to seconds: Double) {
         guard seconds.isFinite, duration.isFinite, duration > 0,

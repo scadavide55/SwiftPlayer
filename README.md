@@ -6,11 +6,11 @@
 ![License](https://img.shields.io/github/license/scadavide55/SwiftPlayer)
 # SwiftPlayer
 
-A minimal, fully native video and audio player for macOS built entirely with SwiftUI and AVFoundation. No third-party dependencies—just Apple's own frameworks.
+A minimal, fully native video and audio player for macOS built with SwiftUI and AVFoundation. No third-party dependencies—just Apple's own frameworks.
 
 ## Features
 
-- **Zero dependencies** – Pure Swift using only AVFoundation and SwiftUI
+- **Zero dependencies** – Apple frameworks only; a small C audio callback uses lock-free gain updates
 - **Hardware-accelerated decoding** – Video is decoded through AVFoundation/VideoToolbox, which on Apple Silicon is handled by the dedicated media engine for smooth, power-efficient playback
 - **HEVC compatibility** – MP4/MOV/M4V files tagged `hev1` with VPS/SPS/PPS in their movie metadata open through a temporary `hvc1` compatibility copy. This preserves the original file, compressed video, audio, resolution, and quality. APFS uses a space-efficient clone; other volumes may require a full temporary copy. Temporary files are removed when playback closes or the file is replaced.
 - **Intuitive controls** – Play/pause, scrubber with time display, and keyboard shortcuts
@@ -22,7 +22,7 @@ A minimal, fully native video and audio player for macOS built entirely with Swi
 - **Media information** – Inspect codecs, resolution, frame rate, audio channels, and subtitle tracks from the Window menu.
 - **Minimal UI** – Clean interface that fades away when idle, keeps focus on your content
 - **Drag & drop** – Load media by dragging files directly onto the window
-- **Keyboard navigation** – Arrow keys for seeking (5-second jumps or continuous fast-forward/reverse), space to play/pause
+- **Keyboard navigation** – Left/Right seek (5-second jumps or continuous fast-forward/reverse), Up/Down adjust volume in 5-percentage-point steps, and Space plays/pauses. Volume defaults to a 200% ceiling; 0% mutes.
 
 ## Supported Formats
 
@@ -126,7 +126,14 @@ run requires both local media environment variables described above. See
 - **Subtitles → Subtitle track** offers Off, Automatic, embedded choices, and a loaded external file. Automatic prefers a full subtitle option in the preferred language, falling back to the first full option before forced-only captions. Explicit track choices take precedence over language preferences.
 - **Subtitles → Appearance and Fonts…** styles decoded text captions in the main window. The caption popover also offers external-file loading and external subtitle delay.
 - **Window → Media Information…** (`⌘I`) shows the current file's streams and duration.
-- **SwiftPlayer → Settings…** (`⌘,`) saves language and appearance preferences, controls whether volume/mute are remembered, and enables optional resume. Turning resume off clears saved positions. Positions near the start or end are not resumed.
+- **SwiftPlayer → Settings…** (`⌘,`) saves language and appearance preferences, sets the maximum volume from 100% to 400% (200% by default), controls whether volume/mute are remembered, and enables optional resume. Turning resume off clears saved positions. Positions near the start or end are not resumed.
+
+100% is the original audio level. Higher values amplify decoded audio through
+AVFoundation audio taps, without changing the system volume or creating a
+second audio playback clock. Peaks are limited to the representable range;
+boosting loud audio can cause clipping. The audio graph stays in place when
+volume changes, including when switching tracks. Lowering the configured
+maximum clamps open players' volume while preserving mute.
 
 Preferences, recent-file references, and resume positions stay in local app storage.
 The main window uses decoded embedded text so appearance controls also work with

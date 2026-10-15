@@ -82,6 +82,14 @@ struct PlayerPreferencesView: View {
                     Toggle("Show embedded subtitles automatically", isOn: $preferences.subtitlesByDefault)
                 }
                 Section("Playback") {
+                    HStack {
+                        Text("Maximum volume")
+                        Slider(value: $preferences.maximumVolume, in: 1...4, step: 0.05)
+                            .accessibilityLabel("Maximum volume")
+                            .accessibilityValue("\(Int((preferences.maximumVolume * 100).rounded())) percent")
+                        Text("\(Int((preferences.maximumVolume * 100).rounded()))%")
+                            .monospacedDigit().frame(width: 44, alignment: .trailing)
+                    }
                     Toggle("Remember volume and mute", isOn: $preferences.rememberVolume)
                     Toggle("Resume files from the last position", isOn: $preferences.resumePlayback)
                     Text("Turning resume off clears saved playback positions.").font(.caption).foregroundStyle(.secondary)

@@ -110,3 +110,48 @@ Release build and static analysis passed. Native accessibility inspection
 confirmed the same Playback menu entries through loading, playback, ending,
 and Settings focus, with unavailable commands disabled. Screen capture was
 unavailable, so no pixel-level visual verification is claimed.
+
+## Configurable volume follow-up — October 16, 2026
+
+Left/Right retain their existing time navigation. Up/Down adjust volume by five
+percentage points, including keyboard repeat. Volume reaches exactly 0% and
+mutes there. Its default ceiling is 200%; Settings > General > Maximum volume
+sets a persistent ceiling from 100% to 400%. The playback slider and percentage
+label reflect that ceiling. Lowering it clamps every open player's volume while
+preserving mute; remember-volume settings also retain boosted levels.
+
+AVPlayer's native volume still handles attenuation from 0% to 100%. An
+AVFoundation audio mix applies gain above 100% to every audio track, including
+tracks selected after loading. A small C callback uses lock-free atomic gain
+updates and performs no allocation or locking while rendering. Each tap retains
+its shared state until finalization, independently of the Swift controller.
+Changing volume updates gain without rebuilding the audio graph or starting a
+second playback clock. Pitch-preserving spectral processing remains enabled.
+Decoded peaks are limited to the representable range; boosted loud sources can
+clip. Supported native PCM processing covers float32/float64 and signed 16/32-bit
+samples; other tap formats pass through. Runtime sample-level checks cover the
+system's mono/stereo decoded float PCM path.
+
+A full regression also exposed an intermittent pre-existing startup ordering
+race: queued autoplay could run before an immediate native Pause command updated
+playback intent. Commit `aa258df` synchronizes main-thread native rate changes
+immediately, retaining asynchronous handling for background callbacks. Its
+regression now checks immediate intent and repeats readiness/pause 200 times.
+The separate fix was checked before committing; its standalone core source also
+passed compilation checks without the volume feature.
+
+Final validation: 103 tests and all 900 numbered scenarios passed with zero
+failures or skips, including local HD/8K checks, 200 startup-pause repetitions,
+volume persistence and live ceiling changes, all 80 keyboard steps from 0% to
+400% and back, and native mute/load replacement. Sample-level AVAssetReader
+checks confirmed unity, 2×, and 4× amplitude for generated mono/stereo tones and
+bounded output for over-range peaks. The Swift gain controller was released
+before reading to verify the tap's independent render-state ownership. Release
+build, static analysis, and macOS (Apple Silicon/Intel), iOS/iPadOS, and visionOS
+core checks passed. Native UI inspection verified the 200% default, a selectable
+400% ceiling, the percentage display, Up 100%→105%, Down 105%→100%, and Left
+seeking with generated silent audio. The preference was returned to 200%.
+
+The audio path follows Apple's [audio-tap guidance](https://developer.apple.com/library/archive/qa/qa1783/_index.html).
+Platform source checks remain distinct from device runtime testing. No media
+content, identifying filenames or paths, or raw diagnostic logs are published.

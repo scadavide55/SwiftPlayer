@@ -26,6 +26,13 @@ final class PlayerPreferences: ObservableObject {
     @Published var subtitleLanguage: String { didSet { defaults.set(subtitleLanguage, forKey: "subtitleLanguage") } }
     @Published var audioLanguage: String { didSet { defaults.set(audioLanguage, forKey: "audioLanguage") } }
     @Published var subtitlesByDefault: Bool { didSet { defaults.set(subtitlesByDefault, forKey: "subtitlesByDefault") } }
+    @Published var maximumVolume: Float {
+        didSet {
+            let normalized = maximumVolume.isFinite ? min(max(maximumVolume, 1), 4) : oldValue
+            if maximumVolume != normalized { maximumVolume = normalized; return }
+            defaults.set(maximumVolume, forKey: "maximumVolume")
+        }
+    }
     @Published var rememberVolume: Bool { didSet { defaults.set(rememberVolume, forKey: "rememberVolume") } }
     @Published var resumePlayback: Bool {
         didSet {
@@ -40,8 +47,8 @@ final class PlayerPreferences: ObservableObject {
         }
     }
     var savedVolume: Float {
-        get { let value = defaults.object(forKey: "savedVolume") as? Float ?? 1; return value.isFinite ? min(max(value, 0), 1) : 1 }
-        set { guard newValue.isFinite else { return }; defaults.set(min(max(newValue, 0), 1), forKey: "savedVolume") }
+        get { let value = defaults.object(forKey: "savedVolume") as? Float ?? 1; return value.isFinite ? min(max(value, 0), maximumVolume) : 1 }
+        set { guard newValue.isFinite else { return }; defaults.set(min(max(newValue, 0), maximumVolume), forKey: "savedVolume") }
     }
     var savedMute: Bool {
         get { defaults.bool(forKey: "savedMute") }
@@ -53,6 +60,8 @@ final class PlayerPreferences: ObservableObject {
         subtitleLanguage = defaults.string(forKey: "subtitleLanguage") ?? ""
         audioLanguage = defaults.string(forKey: "audioLanguage") ?? ""
         subtitlesByDefault = defaults.object(forKey: "subtitlesByDefault") as? Bool ?? true
+        let savedMaximum = defaults.object(forKey: "maximumVolume") as? Float ?? 2
+        maximumVolume = savedMaximum.isFinite ? min(max(savedMaximum, 1), 4) : 2
         rememberVolume = defaults.object(forKey: "rememberVolume") as? Bool ?? true
         resumePlayback = defaults.object(forKey: "resumePlayback") as? Bool ?? false
         appearance = (defaults.data(forKey: "subtitleAppearance").flatMap { try? JSONDecoder().decode(SubtitleAppearance.self, from: $0) } ?? SubtitleAppearance()).normalized
