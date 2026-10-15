@@ -134,18 +134,13 @@ final class PlayerModel: ObservableObject {
         }
         rateObservation = player.observe(\.rate, options: [.old, .new]) { [weak self] player, change in
             guard change.oldValue != change.newValue, let changedItem = player.currentItem else { return }
-            Task { @MainActor [weak self] in
-                guard let self, !self.isFastSeeking, player.currentItem === changedItem,
-                      changedItem.status == .readyToPlay else { return }
-                // Native controls and PiP can change the player without calling
-                // this model. Read the latest rate so old callbacks cannot undo
-                // a newer command; internal hold pauses retain their own intent.
-                let rate = player.rate
-                let requested = rate != 0
-                if self.playbackRequested != requested { self.playbackRequested = requested }
-                if requested {
-                    self.playbackFinished = false
-                    if rate > 0, rate <= 4, self.playbackRate != rate { self.playbackRate = rate }
+            // Main-thread transport commands must update intent before a
+            // queued ready callback can apply initial autoplay.
+            if Thread.isMainThread {
+                MainActor.assumeIsolated { self?.synchronizePlaybackIntent(from: player, item: changedItem) }
+            } else {
+                Task { @MainActor [weak self] in
+                    self?.synchronizePlaybackIntent(from: player, item: changedItem)
                 }
             }
         }
@@ -154,6 +149,18 @@ final class PlayerModel: ObservableObject {
         }
         muteObservation = player.observe(\.isMuted, options: [.new]) { [weak self] _, _ in
             Task { @MainActor [weak self] in self?.synchronizeAudioStateFromPlayer() }
+        }
+    }
+
+    private func synchronizePlaybackIntent(from player: AVPlayer, item: AVPlayerItem) {
+        guard !isFastSeeking, player.currentItem === item, item.status == .readyToPlay else { return }
+        // Background callbacks can arrive later; always read the latest rate.
+        let rate = player.rate
+        let requested = rate != 0
+        if playbackRequested != requested { playbackRequested = requested }
+        if requested {
+            playbackFinished = false
+            if rate > 0, rate <= 4, playbackRate != rate { playbackRate = rate }
         }
     }
 

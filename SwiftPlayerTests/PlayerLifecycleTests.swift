@@ -94,11 +94,12 @@ final class PlayerLifecycleTests: XCTestCase {
     func testNativePauseAtReadinessIsNotOverwrittenByInitialAutoplay() async throws {
         let model = PlayerModel()
         defer { model.teardown() }
-        for _ in 0..<40 {
+        for _ in 0..<200 {
             model.load(url: source)
             try await waitUntil { model.player.currentItem?.status == .readyToPlay && model.duration > 0 }
             model.play()
             model.player.pause()
+            XCTAssertFalse(model.playbackRequested, "Native pause must update intent before queued readiness work runs")
             try await waitUntil { !model.isLoading }
             try await Task.sleep(for: .milliseconds(20))
             XCTAssertEqual(model.player.rate, 0)
