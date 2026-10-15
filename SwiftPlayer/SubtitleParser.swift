@@ -70,7 +70,13 @@ nonisolated private func extractTime(_ match: NSTextCheckingResult, in line: Str
         guard let r = Range(match.range(at: idx), in: line) else { return nil }
         return Int(line[r])
     }
-    let h = value(groups.lowerBound) ?? 0
+    let h: Int
+    if match.range(at: groups.lowerBound).location == NSNotFound {
+        h = 0 // WebVTT permits timestamps without an hours field.
+    } else {
+        guard let hours = value(groups.lowerBound) else { return nil }
+        h = hours
+    }
     guard let m = value(groups.lowerBound + 1),
           let s = value(groups.lowerBound + 2),
           let ms = value(groups.lowerBound + 3) else { return nil }

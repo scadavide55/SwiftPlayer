@@ -88,6 +88,16 @@ final class SubtitleParserTests: XCTestCase {
         XCTAssertEqual(cues[0].end, 64.5, accuracy: 0.0001)
     }
 
+    func testVTTRejectsOverflowingHoursInsteadOfTreatingThemAsZero() throws {
+        let overflow = String(repeating: "9", count: 30)
+        for (start, end) in [("\(overflow):00:01.000", "00:00:02.000"),
+                             ("00:00:01.000", "\(overflow):00:02.000")] {
+            XCTAssertTrue(try parse("WEBVTT\n\n\(start) --> \(end)\nInvalid", as: "vtt").isEmpty)
+        }
+        let valid = try parse("WEBVTT\n\n100:00:01.000 --> 100:00:02.000\nLong form", as: "vtt")
+        XCTAssertEqual(valid.first?.start, 360_001)
+    }
+
     func testUTF16Subtitle() throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".srt")
         defer { try? FileManager.default.removeItem(at: url) }
