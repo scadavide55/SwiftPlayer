@@ -105,6 +105,47 @@ final class HEVCCompatibilityTests: XCTestCase {
                           "Fallback copying must release each read buffer, not retain the entire input.")
     }
 
+    func testCancellationDuringFallbackCopyRemovesPartialOutput() async throws {
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
+        defer { try? FileManager.default.removeItem(at: source) }
+        // A sparse input keeps cancellation observable without allocating its size.
+        try (movie() + Data([0, 0, 0, 0]) + Data("mdat".utf8)).write(to: source)
+        let file = try FileHandle(forWritingTo: source)
+        try file.truncate(atOffset: 8 * 1024 * 1024 * 1024)
+        try file.close()
+        let worker = Task.detached { try HEVCCompatibility.prepare(url: source, allowClone: false) }
+        defer { worker.cancel() }
+        var partial: URL?
+        do {
+            try await waitUntil {
+                let directories = (try? FileManager.default.contentsOfDirectory(
+                    at: FileManager.default.temporaryDirectory, includingPropertiesForKeys: nil)) ?? []
+                partial = directories.filter { $0.lastPathComponent.hasPrefix("SwiftPlayer-") }
+                    .map { $0.appendingPathComponent(source.lastPathComponent) }
+                    .first {
+                        let attributes = try? FileManager.default.attributesOfItem(atPath: $0.path)
+                        return (attributes?[.size] as? NSNumber)?.uint64Value ?? 0 > 0
+                    }
+                return partial != nil
+            }
+        } catch {
+            worker.cancel()
+            if let media = try? await worker.value { media.removeTemporaryFiles() }
+            throw error
+        }
+        worker.cancel()
+        do {
+            let media = try await worker.value
+            media.removeTemporaryFiles()
+            XCTFail("The in-progress fallback copy must observe cancellation.")
+        } catch is CancellationError {
+            // Expected: cancellation must also remove the containing directory.
+        }
+        let output = try XCTUnwrap(partial)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.deletingLastPathComponent().path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+    }
+
     nonisolated private static func physicalFootprint() throws -> UInt64 {
         var info = task_vm_info_data_t()
         var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
@@ -138,12 +179,19 @@ final class HEVCCompatibilityTests: XCTestCase {
         try await verifyPlayback(URL(fileURLWithPath: path), expectedWidth: 8192, seekTime: 120)
     }
 
+    func testLocal8KOrdinarySeekWhenProvided() async throws {
+        guard let path = ProcessInfo.processInfo.environment["SWIFTPLAYER_TEST_MEDIA"] else {
+            throw XCTSkip("Set SWIFTPLAYER_TEST_MEDIA to exercise ordinary local 8K seeking.")
+        }
+        try await verifyPlayback(URL(fileURLWithPath: path), expectedWidth: 8192, seekTime: 120, ordinarySeek: true)
+    }
+
     func testLocal8KRepeatedPlaybackResourceRelease() async throws {
         guard let path = ProcessInfo.processInfo.environment["SWIFTPLAYER_TEST_MEDIA"] else {
             throw XCTSkip("Set SWIFTPLAYER_TEST_MEDIA to exercise repeated local 8K playback.")
         }
         var footprints: [UInt64] = []
-        for _ in 0..<4 {
+        for _ in 0..<10 {
             try await verifyPlayback(URL(fileURLWithPath: path), expectedWidth: 8192, seekTime: 120)
             try await Task.sleep(for: .milliseconds(300))
             var info = task_vm_info_data_t()
@@ -231,7 +279,8 @@ final class HEVCCompatibilityTests: XCTestCase {
         XCTAssertEqual((model.player.currentItem?.asset as? AVURLAsset)?.url, second)
     }
 
-    private func verifyPlayback(_ source: URL, expectedWidth: Int, seekTime: Double, expectsCopy: Bool = true) async throws {
+    private func verifyPlayback(_ source: URL, expectedWidth: Int, seekTime: Double,
+                                expectsCopy: Bool = true, ordinarySeek: Bool = false) async throws {
         let model = PlayerModel()
         defer { model.teardown() }
         model.load(url: source)
@@ -251,9 +300,14 @@ final class HEVCCompatibilityTests: XCTestCase {
             return frame != nil || model.playbackFailed
         }
         XCTAssertEqual(CVPixelBufferGetWidth(try XCTUnwrap(frame)), expectedWidth)
-        let sought = await model.player.seek(to: CMTime(seconds: seekTime, preferredTimescale: 600),
-                                             toleranceBefore: .zero, toleranceAfter: .zero)
-        XCTAssertTrue(sought)
+        if ordinarySeek {
+            model.seek(to: seekTime)
+            try await waitUntil { abs(model.player.currentTime().seconds - seekTime) < 5 || model.playbackFailed }
+        } else {
+            let sought = await model.player.seek(to: CMTime(seconds: seekTime, preferredTimescale: 600),
+                                                 toleranceBefore: .zero, toleranceAfter: .zero)
+            XCTAssertTrue(sought)
+        }
         frame = nil
         try await waitUntil {
             frame = output.copyPixelBuffer(forItemTime: model.player.currentTime(), itemTimeForDisplay: nil)

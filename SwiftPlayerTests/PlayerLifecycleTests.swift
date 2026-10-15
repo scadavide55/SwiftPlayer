@@ -339,4 +339,213 @@ final class PlayerLifecycleTests: XCTestCase {
         XCTAssertFalse(pip.isActive)
         XCTAssertFalse(pip.isPossible)
     }
+
+    func testForwardHoldRestoresSelectedRateAndPauseCancelsIt() async throws {
+        let model = try await loadedPlayer()
+        defer { model.teardown() }
+        model.playbackRate = 1.5
+        model.beginFastSeeking(direction: 1)
+        try await waitUntil { model.isFastSeeking }
+        XCTAssertEqual(model.player.rate, 6)
+        model.endFastSeeking()
+        XCTAssertEqual(model.player.rate, 1.5)
+        model.beginFastSeeking(direction: 1)
+        try await waitUntil { model.isFastSeeking }
+        model.pause()
+        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertFalse(model.isFastSeeking)
+        XCTAssertFalse(model.playbackRequested)
+        XCTAssertEqual(model.player.rate, 0)
+    }
+
+    func testChangingHoldDirectionCancelsPreviousLoop() async throws {
+        let model = try await loadedPlayer()
+        defer { model.teardown() }
+        model.pause()
+        model.seek(to: 10)
+        try await waitUntil { abs(model.player.currentTime().seconds - 10) < 0.1 }
+        model.beginFastSeeking(direction: -1)
+        try await waitUntil { model.isFastSeeking }
+        model.beginFastSeeking(direction: 1)
+        XCTAssertFalse(model.isFastSeeking)
+        try await waitUntil { model.isFastSeeking }
+        let time = model.currentTime
+        try await Task.sleep(for: .milliseconds(450))
+        XCTAssertGreaterThan(model.currentTime, time)
+        model.endFastSeeking()
+        XCTAssertEqual(model.player.rate, 0)
+    }
+
+    func testForwardHoldAtEndDoesNotRepeatSeeks() async throws {
+        let model = try await loadedPlayer()
+        defer { model.teardown() }
+        model.pause()
+        model.seek(to: model.duration)
+        model.beginFastSeeking(direction: 1)
+        try await waitUntil { model.isFastSeeking }
+        try await Task.sleep(for: .milliseconds(250))
+        var changes = 0
+        let observer = model.$currentTime.dropFirst().sink { _ in changes += 1 }
+        defer { observer.cancel() }
+        try await Task.sleep(for: .milliseconds(650))
+        XCTAssertEqual(model.currentTime, model.duration, accuracy: 0.01)
+        XCTAssertEqual(changes, 0)
+        XCTAssertEqual(model.player.rate, 0)
+    }
+
+    func testUnloadedAndInvalidInputsDoNotStartPlaybackOrSeeking() async throws {
+        let model = PlayerModel()
+        defer { model.teardown() }
+        model.play()
+        model.seek(to: 5)
+        model.beginFastSeeking(direction: 1)
+        XCTAssertFalse(model.playbackRequested)
+        XCTAssertNil(model.player.currentItem)
+        model.load(url: source)
+        try await waitUntil { model.isPlaying }
+        model.pause()
+        model.seek(to: 3)
+        try await waitUntil { abs(model.player.currentTime().seconds - 3) < 0.1 }
+        for direction in [Int.min, -2, 0, 2, Int.max] { model.beginFastSeeking(direction: direction) }
+        for time in [Double.nan, .infinity, -.infinity] { model.seek(to: time) }
+        try await Task.sleep(for: .milliseconds(900))
+        XCTAssertFalse(model.isFastSeeking)
+        XCTAssertEqual(model.currentTime, 3, accuracy: 0.1)
+        XCTAssertEqual(model.player.rate, 0)
+    }
+
+    func testReplacingMediaDuringHoldCancelsPreviousSeeking() async throws {
+        let model = try await loadedPlayer()
+        defer { model.teardown() }
+        model.pause()
+        model.seek(to: 12)
+        model.beginFastSeeking(direction: -1)
+        try await waitUntil { model.isFastSeeking }
+        model.load(url: source)
+        try await waitUntil { model.isPlaying && model.duration > 0 }
+        try await Task.sleep(for: .milliseconds(450))
+        XCTAssertFalse(model.isFastSeeking)
+        XCTAssertTrue(model.playbackRequested)
+        XCTAssertLessThan(model.currentTime, 3)
+        XCTAssertEqual(model.player.rate, model.playbackRate)
+    }
+
+    func testTwentyLoadCloseCyclesReleaseEachModelAndItem() async throws {
+        for _ in 0..<20 {
+            var model: PlayerModel? = PlayerModel()
+            let released = { [weak model] in model == nil }
+            model?.load(url: source)
+            try await waitUntil { model?.player.currentItem?.status == .readyToPlay }
+            let player = try XCTUnwrap(model).player
+            weak var item = player.currentItem
+            model?.seek(to: 8)
+            model?.teardown()
+            model = nil
+            try await waitUntil { released() && item == nil }
+            XCTAssertNil(player.currentItem)
+            XCTAssertEqual(player.rate, 0)
+        }
+    }
+
+    func testTenFailedLoadsRecoverWithoutStaleErrors() async throws {
+        let model = PlayerModel()
+        defer { model.teardown() }
+        for _ in 0..<10 {
+            model.load(url: source.appendingPathExtension("missing.mp4"))
+            try await waitUntil { model.playbackFailed }
+            XCTAssertNil(model.player.currentItem)
+            XCTAssertFalse(model.isLoading)
+            model.load(url: source)
+            try await waitUntil { model.isPlaying || model.playbackFailed }
+            XCTAssertFalse(model.playbackFailed)
+            XCTAssertTrue(model.playbackErrorMessage.isEmpty)
+        }
+    }
+
+    func testEndNotificationFromBackgroundQueueIsHandledOnMain() async throws {
+        let model = try await loadedPlayer()
+        defer { model.teardown() }
+        let item = try XCTUnwrap(model.player.currentItem)
+        await Task.detached {
+            NotificationCenter.default.post(name: .AVPlayerItemDidPlayToEndTime, object: item)
+        }.value
+        XCTAssertTrue(model.playbackFinished)
+        XCTAssertFalse(model.playbackRequested)
+    }
+
+    func testLatestSubtitleLoadWinsAndOldCuesAreReleased() async throws {
+        let model = PlayerModel()
+        defer { model.teardown() }
+        let first = source.deletingPathExtension().appendingPathExtension("srt")
+        let second = source.deletingPathExtension().appendingPathExtension("vtt")
+        defer {
+            try? FileManager.default.removeItem(at: first)
+            try? FileManager.default.removeItem(at: second)
+        }
+        try String(repeating: "1\n00:00:00,000 --> 00:00:02,000\nPrevious\n\n", count: 10_000)
+            .write(to: first, atomically: true, encoding: .utf8)
+        try "WEBVTT\n\n00:00.000 --> 00:02.000\nLatest".write(to: second, atomically: true, encoding: .utf8)
+        model.loadSubtitles(url: first)
+        await Task.yield()
+        model.loadSubtitles(url: second)
+        try await waitUntil { model.currentSubtitleText == "Latest" }
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(model.subtitleCues.count, 1)
+        XCTAssertEqual(model.currentSubtitleText, "Latest")
+        model.teardown()
+        XCTAssertTrue(model.subtitleCues.isEmpty)
+    }
+
+    func testLargeSubtitleIndexMatchesLinearLookupAfterBackwardSeeks() {
+        let model = PlayerModel()
+        let cues = (0..<10_000).map { index in
+            SubtitleCue(start: Double(index), end: Double(index) + (index % 11 == 0 ? 20 : 0.5), text: "Cue \(index)")
+        }
+        model.subtitleCues = cues.reversed()
+        model.subtitlesEnabled = true
+        for time in [9_999.25, 5_000.75, 2.25, 999.5, 0, 10_030, 100.2] {
+            model.currentTime = time
+            model.updateSubtitleDisplay()
+            XCTAssertEqual(model.currentSubtitleText, cues.first { $0.start <= time && $0.end >= time }?.text ?? "")
+        }
+    }
+
+    func testKeyboardRepeatsAndFocusLossDoNotLeaveAnActiveHold() throws {
+        let view = KeyEventHandlingView.KeyCatcherView()
+        var plays = 0
+        var directions: [Int] = []
+        var releases = 0
+        view.onSpace = { plays += 1 }
+        view.onArrowDown = { directions.append($0) }
+        view.onArrowUp = { releases += 1 }
+        func event(_ code: UInt16, repeated: Bool = false) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero,
+                modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+                characters: "", charactersIgnoringModifiers: "", isARepeat: repeated, keyCode: code))
+        }
+        view.keyDown(with: try event(49))
+        view.keyDown(with: try event(49, repeated: true))
+        XCTAssertEqual(plays, 1)
+        view.keyDown(with: try event(123))
+        view.keyDown(with: try event(124))
+        XCTAssertEqual(directions, [-1, 1])
+        XCTAssertTrue(view.resignFirstResponder())
+        XCTAssertEqual(releases, 1)
+        KeyEventHandlingView.dismantleNSView(view, coordinator: ())
+        XCTAssertEqual(releases, 2)
+        XCTAssertNil(view.onArrowDown)
+    }
+
+    func testVideoLayerResizesWithoutRepeatingReadyCallback() {
+        let view = PlayerLayerNSView(frame: NSRect(x: 0, y: 0, width: 320, height: 180))
+        var callbacks = 0
+        view.onLayerReady = { _ in callbacks += 1 }
+        view.layout()
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 480)
+        view.layout()
+        XCTAssertEqual(view.playerLayer.frame, view.bounds)
+        XCTAssertEqual(callbacks, 1)
+        PlayerLayerView.dismantleNSView(view, coordinator: ())
+        XCTAssertNil(view.onLayerReady)
+    }
 }
