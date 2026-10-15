@@ -57,6 +57,40 @@ final class PlayerLifecycleTests: XCTestCase {
         }
     }
 
+    func testPitchPreservationSurvivesSpeedChangesAndMediaReplacement() async throws {
+        let model = PlayerModel()
+        defer { model.teardown() }
+        model.load(url: source)
+        model.pause()
+        try await waitUntil { model.player.currentItem?.status == .readyToPlay || model.playbackFailed }
+        XCTAssertFalse(model.playbackFailed)
+        let first = try XCTUnwrap(model.player.currentItem)
+        guard first.audioTimePitchAlgorithm == .spectral else {
+            XCTFail("Configure high-quality pitch preservation before playback begins.")
+            return
+        }
+        for rate: Float in [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4] {
+            model.playbackRate = rate
+            XCTAssertEqual(model.player.rate, 0)
+            model.play()
+            try await waitUntil { model.isPlaying }
+            XCTAssertEqual(model.player.rate, rate)
+            XCTAssertEqual(first.audioTimePitchAlgorithm, .spectral)
+            model.pause()
+        }
+        model.player.rate = 1.5
+        try await waitUntil { model.isPlaying && model.playbackRate == 1.5 }
+        XCTAssertEqual(first.audioTimePitchAlgorithm, .spectral)
+        model.load(url: source)
+        model.pause()
+        try await waitUntil { model.player.currentItem?.status == .readyToPlay || model.playbackFailed }
+        XCTAssertFalse(model.playbackFailed)
+        let replacement = try XCTUnwrap(model.player.currentItem)
+        XCTAssertFalse(replacement === first)
+        XCTAssertEqual(replacement.audioTimePitchAlgorithm, .spectral)
+        XCTAssertEqual(model.player.rate, 0)
+    }
+
     func testNativePlayerControlsUpdatePlaybackIntentAndSelectedRate() async throws {
         let model = try await loadedPlayer()
         defer { model.teardown() }

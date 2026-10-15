@@ -14,6 +14,7 @@ A minimal, fully native video and audio player for macOS built entirely with Swi
 - **Hardware-accelerated decoding** – Video is decoded through AVFoundation/VideoToolbox, which on Apple Silicon is handled by the dedicated media engine for smooth, power-efficient playback
 - **HEVC compatibility** – MP4/MOV/M4V files tagged `hev1` with VPS/SPS/PPS in their movie metadata open through a temporary `hvc1` compatibility copy. This preserves the original file, compressed video, audio, resolution, and quality. APFS uses a space-efficient clone; other volumes may require a full temporary copy. Temporary files are removed when playback closes or the file is replaced.
 - **Intuitive controls** – Play/pause, scrubber with time display, and keyboard shortcuts
+- **Pitch-preserving speed changes** – Playback uses AVFoundation's spectral time-pitch algorithm to keep voices and music at their original pitch as speed changes.
 - **Subtitle support** – SRT, VTT, and ASS/SSA formats with adjustable delay
 - **Minimal UI** – Clean interface that fades away when idle, keeps focus on your content
 - **Drag & drop** – Load media by dragging files directly onto the window
