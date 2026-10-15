@@ -61,6 +61,17 @@ final class SubtitleParserTests: XCTestCase {
         XCTAssertEqual(cues[1].text, "Second cue")
     }
 
+    func testVTTDecodesTextEscapesOnceAfterRemovingMarkup() throws {
+        let text = "WEBVTT\n\n00:00.000 --> 00:02.000\n<b>A &amp; B</b> &lt;b&gt;text&lt;/b&gt; &gt; &nbsp; &lrm; &rlm; &amp;lt; &unknown;"
+        let cues = try parse(text, as: "vtt")
+        XCTAssertEqual(cues.first?.text, "A & B <b>text</b> > \u{00a0} \u{200e} \u{200f} &lt; &unknown;")
+    }
+
+    func testVTTDecodingPreservesCombiningScalarsAndEmoji() throws {
+        let cues = try parse("WEBVTT\n\n00:00.000 --> 00:02.000\n&amp;\u{0301} 👩‍💻 &lt;\u{0301}", as: "vtt")
+        XCTAssertEqual(cues.first?.text, "&\u{0301} 👩‍💻 <\u{0301}")
+    }
+
     func testVTTAcceptsCommaSeparatedTimestamps() throws {
         let vtt = """
         WEBVTT
@@ -148,6 +159,11 @@ final class SubtitleParserTests: XCTestCase {
 
         XCTAssertEqual(cues.count, 1)
         XCTAssertEqual(cues[0].text, "One, two, three")
+    }
+
+    func testASSKeepsLiteralAmpersandText() throws {
+        let cues = try parse("[Events]\nDialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,A &amp; B", as: "ass")
+        XCTAssertEqual(cues.first?.text, "A &amp; B")
     }
 
     func testSSAUsesSameParserAsASS() throws {

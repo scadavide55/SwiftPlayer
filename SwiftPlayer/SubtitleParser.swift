@@ -138,7 +138,25 @@ nonisolated private func parseASS(_ content: String) -> [SubtitleCue] {
 }
 
 nonisolated private func stripTags(_ text: String) -> String {
-    text.replacingOccurrences(of: #"<[^>]+>"#, with: "", options: .regularExpression)
+    let plain = text.replacingOccurrences(of: #"<[^>]+>"#, with: "", options: .regularExpression)
+    guard plain.contains("&") else { return plain }
+    let escapes = [("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"),
+                   ("&nbsp;", "\u{00a0}"), ("&lrm;", "\u{200e}"), ("&rlm;", "\u{200f}")]
+    var result = ""
+    result.reserveCapacity(plain.utf8.count)
+    let scalars = plain.unicodeScalars
+    var index = scalars.startIndex
+    while index < scalars.endIndex {
+        if scalars[index] == "&", let escape = escapes.first(where: { scalars[index...].starts(with: $0.0.unicodeScalars) }) {
+            result.append(contentsOf: escape.1)
+            index = scalars.index(index, offsetBy: escape.0.utf8.count)
+        } else {
+            result.unicodeScalars.append(scalars[index])
+            index = scalars.index(after: index)
+        }
+    }
+    // Decode once, after stripping markup, so escaped literal tags stay visible.
+    return result
 }
 
 nonisolated private func stripASSTags(_ text: String) -> String {
