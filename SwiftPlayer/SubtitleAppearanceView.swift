@@ -95,6 +95,9 @@ struct PlayerPreferencesView: View {
                     Text("Normalization balances quiet and loud passages. Peak protection reduces distortion when boosting volume.")
                         .font(.caption).foregroundStyle(.secondary)
                     Toggle("Remember volume and mute", isOn: $preferences.rememberVolume)
+                    Picker("After playback", selection: $preferences.afterPlayback) {
+                        ForEach(EndOfPlaybackAction.allCases) { Text($0.title).tag($0) }
+                    }
                     Toggle("Resume files from the last position", isOn: $preferences.resumePlayback)
                     Text("Turning resume off clears saved playback positions.").font(.caption).foregroundStyle(.secondary)
                 }

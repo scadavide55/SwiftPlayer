@@ -38,6 +38,7 @@ final class PlayerModel: ObservableObject {
     @Published var playbackFailed: Bool = false
     @Published var playbackErrorMessage: String = ""
     @Published var isLoading: Bool = false
+    @Published private(set) var closedAtEnd = false
     @Published var playbackFinished: Bool = false
     @Published var playbackRate: Float = 1.0 {
         didSet {
@@ -325,6 +326,14 @@ final class PlayerModel: ObservableObject {
                 self.currentTime = self.duration
                 self.updateSubtitleDisplay()
                 self.playbackFinished = true
+                switch self.preferences?.afterPlayback ?? .stay {
+                case .stay: break
+                case .rewind: self.seek(to: 0)
+                case .repeatFile: self.play()
+                case .close:
+                    self.teardown()
+                    self.closedAtEnd = true
+                }
             }
         }
         failureObserver = NotificationCenter.default.addObserver(
@@ -511,6 +520,7 @@ final class PlayerModel: ObservableObject {
         isPlaying = false
         isLoading = false
         playbackFinished = false
+        closedAtEnd = false
         playbackFailed = false
         playbackErrorMessage = ""
         isScrubbing = false

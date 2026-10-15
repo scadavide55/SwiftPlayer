@@ -59,7 +59,7 @@ struct PlayerCommands: Commands {
             }
         }
         CommandMenu("Playback") {
-            PlaybackMenu(state: window?.menus ?? inactive, jump: { window?.jump() })
+            PlaybackMenu(state: window?.menus ?? inactive, preferences: preferences, jump: { window?.jump() })
         }
         CommandMenu("Audio") {
             AudioMenu(state: window?.menus ?? inactive, preferences: preferences)
@@ -84,6 +84,7 @@ struct PlayerCommands: Commands {
 
 struct PlaybackMenu: View {
     @ObservedObject var state: PlayerMenuState
+    @ObservedObject var preferences: PlayerPreferences
     let jump: () -> Void
     var body: some View {
         Button(state.snapshot.playbackRequested ? "Pause" : "Play") { state.model?.togglePlayPause() }
@@ -104,6 +105,10 @@ struct PlaybackMenu: View {
         Button("Forward 10 Seconds") {
             if let model = state.model { model.seek(to: model.currentTime + 10) }
         }.disabled(!state.snapshot.canNavigate)
+        Divider()
+        Picker("After Playback", selection: $preferences.afterPlayback) {
+            ForEach(EndOfPlaybackAction.allCases) { Text($0.title).tag($0) }
+        }
     }
 }
 

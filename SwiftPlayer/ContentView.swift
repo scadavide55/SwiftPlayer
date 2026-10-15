@@ -61,6 +61,7 @@ private struct PlayerContentView: View {
                 RecentMediaStore.shared.record(url)
             }
         }
+        .onChange(of: model.closedAtEnd) { closed in if closed { goHome() } }
         .onChange(of: pipController.isActive) { active in model.mediaControls.nativeSubtitleRendering = active }
         .frame(minWidth: 480, minHeight: 320)
         .background(PlayerWindowObserver(onFullScreenChanged: { isFullScreen = $0 },
@@ -199,16 +200,6 @@ private struct PlayerContentView: View {
                             }
                         } message: {
                             Text(model.playbackErrorMessage)
-                        }
-                        .alert("Finished playing", isPresented: $model.playbackFinished) {
-                            Button("Go Home") {
-                                goHome()
-                            }
-                            Button("Stay", role: .cancel) {
-                                model.seek(to: 0)
-                            }
-                        } message: {
-                            Text("Do you want to go back to the file select screen?")
                         }
                         .overlay(alignment: .topTrailing) {
                             if controlsVisible {
