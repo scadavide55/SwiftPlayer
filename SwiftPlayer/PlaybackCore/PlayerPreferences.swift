@@ -33,6 +33,8 @@ final class PlayerPreferences: ObservableObject {
             defaults.set(maximumVolume, forKey: "maximumVolume")
         }
     }
+    @Published var limitAudioPeaks: Bool { didSet { defaults.set(limitAudioPeaks, forKey: "limitAudioPeaks") } }
+    @Published var normalizeAudio: Bool { didSet { defaults.set(normalizeAudio, forKey: "normalizeAudio") } }
     @Published var rememberVolume: Bool { didSet { defaults.set(rememberVolume, forKey: "rememberVolume") } }
     @Published var resumePlayback: Bool {
         didSet {
@@ -62,6 +64,8 @@ final class PlayerPreferences: ObservableObject {
         subtitlesByDefault = defaults.object(forKey: "subtitlesByDefault") as? Bool ?? true
         let savedMaximum = defaults.object(forKey: "maximumVolume") as? Float ?? 2
         maximumVolume = savedMaximum.isFinite ? min(max(savedMaximum, 1), 4) : 2
+        limitAudioPeaks = defaults.object(forKey: "limitAudioPeaks") as? Bool ?? true
+        normalizeAudio = defaults.object(forKey: "normalizeAudio") as? Bool ?? false
         rememberVolume = defaults.object(forKey: "rememberVolume") as? Bool ?? true
         resumePlayback = defaults.object(forKey: "resumePlayback") as? Bool ?? false
         appearance = (defaults.data(forKey: "subtitleAppearance").flatMap { try? JSONDecoder().decode(SubtitleAppearance.self, from: $0) } ?? SubtitleAppearance()).normalized

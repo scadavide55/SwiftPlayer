@@ -90,6 +90,10 @@ struct PlayerPreferencesView: View {
                         Text("\(Int((preferences.maximumVolume * 100).rounded()))%")
                             .monospacedDigit().frame(width: 44, alignment: .trailing)
                     }
+                    Toggle("Protect boosted audio peaks", isOn: $preferences.limitAudioPeaks)
+                    Toggle("Normalize audio level", isOn: $preferences.normalizeAudio)
+                    Text("Normalization balances quiet and loud passages. Peak protection reduces distortion when boosting volume.")
+                        .font(.caption).foregroundStyle(.secondary)
                     Toggle("Remember volume and mute", isOn: $preferences.rememberVolume)
                     Toggle("Resume files from the last position", isOn: $preferences.resumePlayback)
                     Text("Turning resume off clears saved playback positions.").font(.caption).foregroundStyle(.secondary)

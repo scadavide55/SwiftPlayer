@@ -56,6 +56,7 @@ final class PlayerModel: ObservableObject {
     @Published private(set) var playbackRequested: Bool = false
     @Published private(set) var maximumVolume: Float = 2
     private let audioGain = AudioGainController()
+    private var audioProcessingObservation: AnyCancellable?
     private var maximumVolumeObservation: AnyCancellable?
     @Published var volume: Float = 1.0 {
         didSet {
@@ -113,6 +114,12 @@ final class PlayerModel: ObservableObject {
         self.preferences = preferences
         mediaControls = PlayerMediaControls(player: nativePlayer, preferences: preferences)
         mediaControls.onSeek = { [weak self] time in self?.seek(to: time) }
+        if let preferences {
+            audioProcessingObservation = preferences.$limitAudioPeaks.combineLatest(preferences.$normalizeAudio)
+                .sink { [weak self] limiter, normalization in
+                    self?.audioGain.configure(limiter: limiter, normalization: normalization)
+                }
+        }
         maximumVolume = preferences?.maximumVolume ?? 2
         maximumVolumeObservation = preferences?.$maximumVolume.removeDuplicates().sink { [weak self] limit in
             guard let self, limit.isFinite else { return }
