@@ -171,12 +171,8 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
 
     private func preferred(_ tracks: [MediaTrackChoice], language: String) -> MediaTrackChoice? {
         let requested = language.isEmpty ? Locale.preferredLanguages : [language]
-        for tag in requested {
-            if let exact = tracks.first(where: { $0.language?.replacingOccurrences(of: "_", with: "-").lowercased() == tag.lowercased() }) { return exact }
-            let base = tag.lowercased().split(separator: "-").first
-            if let match = tracks.first(where: { $0.language?.lowercased().replacingOccurrences(of: "_", with: "-").split(separator: "-").first == base }) { return match }
-        }
-        return nil
+        guard let index = preferredLanguageIndex(in: tracks.map(\.language), preferred: requested) else { return nil }
+        return tracks[index]
     }
 
     private func applySubtitleSelection() {

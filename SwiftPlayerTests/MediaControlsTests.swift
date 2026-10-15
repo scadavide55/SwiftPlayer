@@ -215,4 +215,11 @@ final class MediaControlsTests: XCTestCase {
         }
     }
 
+    func testLanguagePreferenceKeepsScriptAndRegionChoices() {
+        XCTAssertEqual(preferredLanguageIndex(in: ["zh-Hans-CN", "zh-Hant-HK"], preferred: ["zh-Hant"]), 1)
+        XCTAssertEqual(preferredLanguageIndex(in: ["ja-JP", "en-US", "en-GB"], preferred: ["en-GB"]), 2)
+        XCTAssertEqual(preferredLanguageIndex(in: ["ja-JP", "en_US"], preferred: ["en-AU"]), 1)
+        XCTAssertNil(preferredLanguageIndex(in: [nil, "ja-JP"], preferred: ["es"]))
+    }
+
 }
