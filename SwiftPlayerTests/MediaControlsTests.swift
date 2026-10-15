@@ -159,4 +159,31 @@ final class MediaControlsTests: XCTestCase {
         try await wait { model.player.currentItem?.status == .readyToPlay && model.duration > 0 }
         XCTAssertLessThan(model.player.currentTime().seconds, 0.5)
     }
+    func testChaptersAndAudioLanguageWhenProvided() async throws {
+        guard let path = ProcessInfo.processInfo.environment["SWIFTPLAYER_TEST_CHAPTER_MEDIA"] else {
+            throw XCTSkip("Provide the synthetic chapter and language fixture.")
+        }
+        let settings = PlayerPreferences(defaults: defaults)
+        settings.audioLanguage = "ja"
+        let model = PlayerModel(preferences: settings)
+        defer { model.teardown() }
+        model.load(url: URL(fileURLWithPath: path))
+        model.pause()
+        try await wait { model.player.currentItem?.status == .readyToPlay && !model.mediaControls.isDiscovering && model.duration > 0 || model.playbackFailed }
+        XCTAssertFalse(model.playbackFailed)
+        let controls = model.mediaControls
+        XCTAssertEqual(controls.chapters.count, 2)
+        XCTAssertEqual(controls.chapters.last?.title, "Second Chapter")
+        XCTAssertEqual(controls.chapters.last?.start, 10)
+        let loadedGroup = try await model.player.currentItem?.asset.loadMediaSelectionGroup(for: .audible)
+        let group = try XCTUnwrap(loadedGroup)
+        let selected = try XCTUnwrap(model.player.currentItem?.currentMediaSelection.selectedMediaOption(in: group))
+        XCTAssertEqual(selected.locale?.language.languageCode?.identifier, "ja")
+        settings.audioLanguage = "en"
+        try await wait { model.player.currentItem?.currentMediaSelection.selectedMediaOption(in: group)?.locale?.language.languageCode?.identifier == "en" }
+        model.seek(to: try XCTUnwrap(controls.chapters.last?.start))
+        try await wait { abs(model.player.currentTime().seconds - 10) < 0.5 }
+        XCTAssertEqual(model.player.rate, 0)
+    }
+
 }

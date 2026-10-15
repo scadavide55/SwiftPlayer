@@ -86,7 +86,10 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
             do {
                 let subtitles = try await asset.loadMediaSelectionGroup(for: .legible)
                 let audio = try await asset.loadMediaSelectionGroup(for: .audible)
-                let chapterGroups = (try? await asset.loadChapterMetadataGroups(bestMatchingPreferredLanguages: Locale.preferredLanguages)) ?? []
+                var chapterGroups = (try? await asset.loadChapterMetadataGroups(bestMatchingPreferredLanguages: Locale.preferredLanguages)) ?? []
+                if chapterGroups.isEmpty, let locale = try? await asset.load(.availableChapterLocales).first {
+                    chapterGroups = (try? await asset.loadChapterMetadataGroups(withTitleLocale: locale, containingItemsWithCommonKeys: [.commonKeyTitle])) ?? []
+                }
                 var chapters: [PlaybackChapter] = []
                 for (index, group) in chapterGroups.enumerated() {
                     let titleItem = AVMetadataItem.metadataItems(from: group.items, filteredByIdentifier: .commonIdentifierTitle).first
