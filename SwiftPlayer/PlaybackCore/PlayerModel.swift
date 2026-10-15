@@ -132,10 +132,11 @@ final class PlayerModel: ObservableObject {
                 self?.isPlaying = player.timeControlStatus == .playing
             }
         }
-        rateObservation = player.observe(\.rate, options: [.new]) { [weak self] player, _ in
+        rateObservation = player.observe(\.rate, options: [.old, .new]) { [weak self] player, change in
+            guard change.oldValue != change.newValue, let changedItem = player.currentItem else { return }
             Task { @MainActor [weak self] in
-                guard let self, !self.isLoading, !self.isFastSeeking,
-                      player.currentItem?.status == .readyToPlay else { return }
+                guard let self, !self.isFastSeeking, player.currentItem === changedItem,
+                      changedItem.status == .readyToPlay else { return }
                 // Native controls and PiP can change the player without calling
                 // this model. Read the latest rate so old callbacks cannot undo
                 // a newer command; internal hold pauses retain their own intent.
