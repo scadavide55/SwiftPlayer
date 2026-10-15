@@ -45,19 +45,17 @@ correction was checked before its separate commit:
 
 ## Validation
 
-A full run passed **96 XCTest methods**, all **900 numbered scenarios**, with
-zero failures and zero skips, including local HD/8K and the synthetic chapter
-fixture. After the final selector-cleanup correction, all nine focused media
-and external-selection tests passed. The final Release build, static analysis,
-and all four shared-core platform checks passed.
+The final code at `84faeac` passed **96 XCTest methods** and all **900 numbered
+scenarios** on October 16, 2026, with zero failures and zero skips. This run
+includes the local HD/8K media, synthetic chapter fixture, and final
+selector-cleanup correction. The final Release build, static analysis, and all
+four shared-core platform checks also passed.
 
-A subsequent full rerun encountered system-audio startup timeouts in a later test process. The same startup failure was reproduced on the earlier main commit
-and with a bare AVPlayer after the compatibility workload. A bare AVPlayer in
-an isolated fresh process also passed, so the observed condition is intermittent;
-this review does not claim its precise OS/device cause. A healthy-audio full
-rerun is still pending, and the pull request remains a draft until that check
-can finish. The earlier 96-test pass predates the final selector-cleanup change;
-it is not represented as a complete full-suite pass of the final tree.
+Earlier full reruns encountered intermittent system-audio startup timeouts,
+which were also reproduced on the earlier main commit and with a bare
+AVPlayer after the compatibility workload. After the Mac was unlocked and
+audio availability was confirmed, the complete final-code rerun passed. This
+review does not claim a precise OS/device cause for those earlier timeouts.
 
 Native UI inspection verified the Settings tabs, font and appearance controls,
 live preview layout, Playback chapter menu, and Jump to Time dialog. Jumping
