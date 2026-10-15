@@ -57,6 +57,26 @@ final class PlayerLifecycleTests: XCTestCase {
         }
     }
 
+    func testNativePlayerControlsUpdatePlaybackIntentAndSelectedRate() async throws {
+        let model = try await loadedPlayer()
+        defer { model.teardown() }
+        model.player.pause()
+        try await waitUntil { !model.isPlaying }
+        XCTAssertFalse(model.playbackRequested, "Native playback controls must update the shared play/pause intent.")
+        model.playbackRate = 1.5
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(model.player.rate, 0, "Changing speed after a native pause must preserve pause.")
+        model.player.rate = 2
+        try await waitUntil { model.isPlaying }
+        XCTAssertTrue(model.playbackRequested)
+        XCTAssertEqual(model.playbackRate, 2)
+        model.togglePlayPause()
+        XCTAssertEqual(model.player.rate, 0)
+        model.player.play()
+        try await waitUntil { model.isPlaying }
+        XCTAssertTrue(model.playbackRequested)
+    }
+
     func testVolumeClampsInvalidValuesAndUnmutesOnIncrease() {
         let model = PlayerModel()
         model.volume = -1

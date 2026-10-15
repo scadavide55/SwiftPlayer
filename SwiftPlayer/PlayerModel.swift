@@ -45,7 +45,8 @@ final class PlayerModel: ObservableObject {
                 playbackRate = oldValue
                 return
             }
-            if playbackRequested, player.currentItem?.status == .readyToPlay, !isFastSeeking {
+            if playbackRequested, player.currentItem?.status == .readyToPlay, !isFastSeeking,
+               player.rate != playbackRate {
                 player.rate = playbackRate
             }
         }
@@ -74,6 +75,7 @@ final class PlayerModel: ObservableObject {
     private var itemStatusObservation: NSKeyValueObservation?
     private var itemDurationObservation: NSKeyValueObservation?
     private var timeControlObservation: NSKeyValueObservation?
+    private var rateObservation: NSKeyValueObservation?
     private var loadTask: Task<Void, Never>?
     private var loadIdentifier = UUID()
     private var preparedMedia: PreparedMedia?
@@ -107,6 +109,22 @@ final class PlayerModel: ObservableObject {
         timeControlObservation = player.observe(\.timeControlStatus, options: [.new, .initial]) { [weak self] player, _ in
             Task { @MainActor [weak self] in
                 self?.isPlaying = player.timeControlStatus == .playing
+            }
+        }
+        rateObservation = player.observe(\.rate, options: [.new]) { [weak self] player, _ in
+            Task { @MainActor [weak self] in
+                guard let self, !self.isLoading, !self.isFastSeeking,
+                      player.currentItem?.status == .readyToPlay else { return }
+                // Native controls and PiP can change the player without calling
+                // this model. Read the latest rate so old callbacks cannot undo
+                // a newer command; internal hold pauses retain their own intent.
+                let rate = player.rate
+                let requested = rate != 0
+                if self.playbackRequested != requested { self.playbackRequested = requested }
+                if requested {
+                    self.playbackFinished = false
+                    if rate > 0, rate <= 4, self.playbackRate != rate { self.playbackRate = rate }
+                }
             }
         }
     }
@@ -217,6 +235,7 @@ final class PlayerModel: ObservableObject {
                 guard let self, self.player.currentItem === item else { return }
                 self.playbackRequested = false
                 self.endFastSeeking()
+                self.player.pause()
                 self.isPlaying = false
                 self.currentTime = self.duration
                 self.updateSubtitleDisplay()
