@@ -106,7 +106,7 @@ struct InfoPanelView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("About")
                     .font(.subheadline).bold()
-                Text("A minimal, fully native video and audio player built entirely with Apple's own swift frameworks — no third-party libraries or dependencies. Playback runs through AVFoundation, using the Mac's Apple Silicon chip  dedicated hardware decoder for smooth, power-efficient performance. The interface stays intentionally simple: play/pause, a scrubber with elapsed and remaining time, keyboard shortcuts for quick control, and support for SRT, VTT, and ASS/SSA subtitles with an adjustable delay. Nothing else runs in the background — just what's needed to play.")
+                Text("A native video and audio player using Apple’s AVFoundation. Choose audio and subtitle tracks, load external subtitles, customize caption fonts and appearance, jump to chapters or a time, and reopen recent files. Settings remember your language and appearance choices, with optional playback resume and saved volume. Available codecs and resolutions depend on your device.")
                     .font(.callout)
                     .fixedSize(horizontal: false, vertical: true)
             }

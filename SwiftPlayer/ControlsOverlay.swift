@@ -88,7 +88,7 @@ struct ControlsOverlay: View {
                     Text(formatPlaybackRate(model.playbackRate))
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
                         .foregroundStyle(.white)
-                        .frame(width: 28)
+                        .frame(width: 40)
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()

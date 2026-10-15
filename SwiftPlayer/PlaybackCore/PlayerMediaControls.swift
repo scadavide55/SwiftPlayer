@@ -125,10 +125,10 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
                     let extendedLanguage = try await track.load(.extendedLanguageTag)
                     let legacyLanguage = try await track.load(.languageCode)
                     let language = extendedLanguage ?? legacyLanguage
-                    var details = language ?? "Language unspecified"
+                    var details = language.flatMap { $0 == "und" ? nil : Locale.current.localizedString(forLanguageCode: $0) } ?? "Language unspecified"
                     if track.mediaType == .video { details = "\(Int(abs(size.width))) × \(Int(abs(size.height))), \(String(format: "%.2f", rate)) fps" }
                     if let format = formats.first, let audio = CMAudioFormatDescriptionGetStreamBasicDescription(format), track.mediaType == .audio {
-                        details += ", \(audio.pointee.mChannelsPerFrame) channels, \(Int(audio.pointee.mSampleRate)) Hz"
+                        details += ", \(audio.pointee.mChannelsPerFrame) \(audio.pointee.mChannelsPerFrame == 1 ? "channel" : "channels"), \(Int(audio.pointee.mSampleRate)) Hz"
                     }
                     streams.append(MediaStreamInfo(id: track.trackID, kind: Self.kind(track.mediaType), codec: codecs, details: details))
                 }
@@ -265,6 +265,6 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
         String(bytes: [24, 16, 8, 0].map { UInt8(truncatingIfNeeded: value >> $0) }, encoding: .ascii) ?? "Unknown"
     }
     nonisolated private static func kind(_ type: AVMediaType) -> String {
-        switch type { case .video: return "Video"; case .audio: return "Audio"; case .subtitle, .text, .closedCaption: return "Subtitle"; default: return "Other" }
+        switch type { case .video: return "Video"; case .audio: return "Audio"; case .subtitle, .closedCaption: return "Subtitle"; case .text: return "Text"; default: return "Other" }
     }
 }

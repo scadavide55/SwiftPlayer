@@ -13,6 +13,19 @@ func formatTime(_ seconds: Double) -> String {
     }
 }
 
+func parsePlaybackTime(_ text: String) -> Double? {
+    let parts = text.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ":", omittingEmptySubsequences: false)
+    guard (1...3).contains(parts.count), !parts.contains(where: { $0.isEmpty }) else { return nil }
+    var result: Double = 0
+    for (index, part) in parts.enumerated() {
+        guard part.allSatisfy({ $0.isNumber || $0 == "." }), let value = Double(part), value.isFinite, value >= 0,
+              index == parts.count - 1 || value.rounded(.down) == value,
+              index == 0 || value < 60 else { return nil }
+        result = result * 60 + value
+    }
+    return result.isFinite ? result : nil
+}
+
 func formatPlaybackRate(_ rate: Float) -> String {
     String(format: "%g×", rate)
 }

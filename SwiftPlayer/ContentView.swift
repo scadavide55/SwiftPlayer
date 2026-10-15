@@ -4,7 +4,8 @@ import UniformTypeIdentifiers
 import AVFoundation
 
 struct ContentView: View {
-    @StateObject private var model = PlayerModel()
+    @StateObject private var model = PlayerModel(preferences: PlayerPreferences.shared)
+    @ObservedObject private var preferences = PlayerPreferences.shared
     @StateObject private var pipController = PiPController()
     @State private var hasLoadedFile: Bool = false
     
@@ -19,6 +20,10 @@ struct ContentView: View {
     @State private var showHomeConfirm: Bool = false
     @State private var showSubtitlePanel: Bool = false
     @State private var isFullScreen: Bool = false
+    @State private var showAppearance = false
+    @State private var showJump = false
+    @State private var showInformation = false
+    @State private var activeSourceURL: URL?
     var body: some View {
         Group {
             if hasLoadedFile {
@@ -29,6 +34,23 @@ struct ContentView: View {
                 }
             }
         }
+        .focusedSceneValue(\.playerWindow, PlayerWindowContext(model: model, open: requestOpen,
+            jump: { showJump = true }, information: { showInformation = true },
+            subtitles: openSubtitlePicker, appearance: { showAppearance = true }))
+        .sheet(isPresented: $showAppearance) {
+            VStack {
+                SubtitleAppearanceView(preferences: preferences)
+                Button("Done") { showAppearance = false }.keyboardShortcut(.defaultAction).padding(.bottom, 12)
+            }
+        }
+        .sheet(isPresented: $showJump) { JumpToTimeView(duration: model.duration) { model.seek(to: $0) } }
+        .sheet(isPresented: $showInformation) { MediaInformationView(model: model, media: model.mediaControls) }
+        .onChange(of: model.isLoading) { loading in
+            if !loading, !model.playbackFailed, model.player.currentItem?.status == .readyToPlay, let url = activeSourceURL {
+                RecentMediaStore.shared.record(url)
+            }
+        }
+        .onChange(of: pipController.isActive) { active in model.mediaControls.nativeSubtitleRendering = active }
         .frame(minWidth: 480, minHeight: 320)
         .background(PlayerWindowObserver(onFullScreenChanged: { isFullScreen = $0 },
                                          onResignKey: { stopInteractions() }))
@@ -49,6 +71,10 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
             stopInteractions()
+            model.mediaControls.savePosition()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            model.teardown()
         }
         .onChange(of: isInteracting) { _ in
             registerActivity()
@@ -68,18 +94,8 @@ struct ContentView: View {
                             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    if !model.currentSubtitleText.isEmpty {
-                                        Text(model.currentSubtitleText)
-                                            .font(.system(size: 20, weight: .semibold))
-                                            .foregroundStyle(.white)
-                                            .multilineTextAlignment(.center)
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 6)
-                                            .background(Color.black.opacity(0.6))
-                                            .cornerRadius(6)
-                                            .padding(.bottom, controlsVisible ? 70:24)
-                                            .transition(.opacity)
-                                    }
+                    CaptionOverlay(model: model, media: model.mediaControls, preferences: preferences,
+                                   controlsVisible: controlsVisible, nativeRendering: pipController.isActive)
 
                     if controlsVisible {
                         ControlsOverlay(model: model)
@@ -227,27 +243,11 @@ struct ContentView: View {
                                     .buttonStyle(.plain)
                                     .buttonStyle(.plain)
                                     .popover(isPresented: $showSubtitlePanel, arrowEdge: .bottom) {
-                                        VStack(alignment: .leading, spacing: 14) {
-                                            Button("Load Subtitles…") {
-                                                openSubtitlePicker()
-                                            }
-
-                                            Divider()
-
-                                            Toggle("Show Subtitles", isOn: $model.subtitlesEnabled)
-                                                .disabled(model.subtitleCues.isEmpty)
-
-                                            VStack(alignment: .leading, spacing: 6) {
-                                                Text("Subtitle Delay")
-                                                    .font(.subheadline).bold()
-                                                Text(String(format: "%+.1fs", model.subtitleOffset))
-                                                    .font(.system(.body, design: .monospaced))
-                                                    .foregroundStyle(.secondary)
-                                                Slider(value: $model.subtitleOffset, in: -5...5, step: 0.5)
-                                            }
-                                        }
-                                        .padding(16)
-                                        .frame(width: 260)
+                                        SubtitlePanel(model: model, media: model.mediaControls, preferences: preferences,
+                                                      openFile: openSubtitlePicker, appearance: {
+                                                          showSubtitlePanel = false
+                                                          showAppearance = true
+                                                      })
                                     }
                                 }
                                 .padding(16)
@@ -256,7 +256,7 @@ struct ContentView: View {
         }
     private var isInteracting: Bool {
         model.isScrubbing || model.isLoading || model.playbackFailed || model.playbackFinished
-            || showSubtitlePanel || showHomeConfirm || showReplaceConfirm
+            || showSubtitlePanel || showHomeConfirm || showReplaceConfirm || showAppearance || showJump || showInformation
     }
 
     private func goHome() {
@@ -264,6 +264,7 @@ struct ContentView: View {
         pipController.detach()
         model.teardown()
         hasLoadedFile = false
+        activeSourceURL = nil
         showSubtitlePanel = false
         pendingReplacementURL = nil
     }
@@ -293,9 +294,16 @@ struct ContentView: View {
         }
     }
 
+    private func requestOpen(_ url: URL) {
+        guard supportedExtensions.contains(url.pathExtension.lowercased()) else { return }
+        if hasLoadedFile { pendingReplacementURL = url; showReplaceConfirm = true }
+        else { load(url: url) }
+    }
+
     private func load(url: URL) {
         stopInteractions()
         pipController.stop()
+        activeSourceURL = url
         model.load(url: url)
         hasLoadedFile = true
         pendingReplacementURL = nil
