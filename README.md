@@ -79,6 +79,12 @@ The opt-in 8K tests also repeat playback/seek/teardown cycles and record the tes
 process's physical memory footprint after cleanup; this is not a live playback
 memory limit. Ordinary scrubber and keyboard seeks use AVFoundation's default
 tolerance. Exact seeking is used only by the decoding regression tests.
+The eight debugging matrices execute 100 numbered scenario/input combinations
+per area. For the complete compatibility matrix, also set
+`TEST_RUNNER_SWIFTPLAYER_TEST_HD_MEDIA` to a local 1920-pixel-wide `hev1` HEVC
+sample. Its audio and subtitle track types are checked for preservation during
+preparation. Test media remains local. See [the debugging review](DEBUG_REVIEW_800.md)
+for coverage, results, and limitations.
 Supported video resolutions and profiles still depend on the Mac's native decoder.
 Retagging is a compatibility workaround, not a general HEVC conversion: streams
 that depend on new parameter sets carried inside later frames may still fail.
