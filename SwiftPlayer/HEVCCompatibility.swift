@@ -30,18 +30,24 @@ enum HEVCCompatibility {
         var patches: [UInt64] = []
         while offset < length {
             try Task.checkCancellation()
-            try source.seek(toOffset: offset)
-            let header = try source.read(upToCount: 16) ?? Data()
-            guard let box = box(in: header, at: 0, limit: length - offset) else { break }
-            if box.type == "moov" {
-                // Bound metadata allocation, even for corrupt/untrusted files.
-                guard box.size <= 64 * 1024 * 1024 else { break }
+            // Foundation may retain read buffers until this worker finishes.
+            // Drain each box's buffers even when a file contains many tiny boxes.
+            let size: UInt64? = try autoreleasepool {
                 try source.seek(toOffset: offset)
-                let data = try source.read(upToCount: Int(box.size)) ?? Data()
-                guard data.count == Int(box.size) else { break }
-                patches += sampleEntryOffsets(in: data).map { offset + UInt64($0) }
+                let header = try source.read(upToCount: 16) ?? Data()
+                guard let box = box(in: header, at: 0, limit: length - offset) else { return nil }
+                if box.type == "moov" {
+                    // Bound metadata allocation, even for corrupt/untrusted files.
+                    guard box.size <= 64 * 1024 * 1024 else { return nil }
+                    try source.seek(toOffset: offset)
+                    let data = try source.read(upToCount: Int(box.size)) ?? Data()
+                    guard data.count == Int(box.size) else { return nil }
+                    patches += sampleEntryOffsets(in: data).map { offset + UInt64($0) }
+                }
+                return box.size
             }
-            offset += box.size
+            guard let size else { break }
+            offset += size
         }
         guard !patches.isEmpty else { return PreparedMedia(url: url, temporaryDirectory: nil) }
 

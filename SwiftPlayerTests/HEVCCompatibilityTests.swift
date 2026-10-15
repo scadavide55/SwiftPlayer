@@ -158,6 +158,26 @@ final class HEVCCompatibilityTests: XCTestCase {
         return info.phys_footprint
     }
 
+    func testManySmallBoxHeadersReleaseReadBuffersDuringScanning() async throws {
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
+        defer { try? FileManager.default.removeItem(at: source) }
+        // Millions of tiny boxes must not accumulate autoreleased header buffers.
+        let header = atom("free", Data())
+        var contents = Data(capacity: header.count * 1_000_000)
+        for _ in 0..<1_000_000 { contents.append(header) }
+        try contents.write(to: source)
+        let growth = try await Task.detached {
+            let before = try Self.physicalFootprint()
+            let media = try HEVCCompatibility.prepare(url: source)
+            defer { media.removeTemporaryFiles() }
+            let after = try Self.physicalFootprint()
+            return after > before ? after - before : 0
+        }.value
+        print("Metadata-scan memory growth (MiB): \(growth / (1024 * 1024))")
+        XCTAssertLessThan(growth, 32 * 1024 * 1024,
+                          "Metadata scanning must release each header buffer during the scan.")
+    }
+
     func testNativeHEVCPlaybackAndSeekingAfterRetagging() async throws {
         let source = try await makeHEVCFixture()
         defer { try? FileManager.default.removeItem(at: source) }
