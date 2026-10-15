@@ -291,7 +291,6 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
 
     func externalSubtitlesUnavailable() {
         subtitleStatusMessage = "The subtitle file could not be loaded. Choose a readable subtitle file."
-        if subtitleSelection == "off" { subtitleSelection = "automatic" }
     }
 
     func tick(time: Double, duration: Double) {

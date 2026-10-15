@@ -472,14 +472,17 @@ final class PlayerModel: ObservableObject {
                 await worker.value
             } onCancel: { worker.cancel() }
             guard let self, self.subtitleLoadIdentifier == identifier, !Task.isCancelled else { return }
-            self.subtitleCues = cues
-            self.subtitlesEnabled = !cues.isEmpty
-            if !cues.isEmpty {
-                self.mediaControls.useExternalSubtitles(named: url.lastPathComponent, reference: reference,
-                    activate: self.mediaControls.subtitleSelectionRevision == selectionRevision)
-            } else if self.mediaControls.subtitleSelectionRevision == selectionRevision {
-                self.mediaControls.externalSubtitlesUnavailable()
+            guard !cues.isEmpty else {
+                if self.mediaControls.subtitleSelectionRevision == selectionRevision {
+                    self.mediaControls.externalSubtitlesUnavailable()
+                }
+                self.subtitleLoadTask = nil
+                return
             }
+            self.subtitleCues = cues
+            self.subtitlesEnabled = true
+            self.mediaControls.useExternalSubtitles(named: url.lastPathComponent, reference: reference,
+                activate: self.mediaControls.subtitleSelectionRevision == selectionRevision)
             self.subtitleLoadTask = nil
         }
     }
