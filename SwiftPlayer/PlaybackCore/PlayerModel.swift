@@ -1,5 +1,5 @@
 import AVFoundation
-import SwiftUI
+import Foundation
 import Combine
 
 /// Extensions AVFoundation can natively decode (container-level allow-list
@@ -45,7 +45,8 @@ final class PlayerModel: ObservableObject {
                 playbackRate = oldValue
                 return
             }
-            if playbackRequested, player.currentItem?.status == .readyToPlay, !isFastSeeking {
+            if playbackRequested, player.currentItem?.status == .readyToPlay, !isFastSeeking,
+               player.rate != playbackRate {
                 player.rate = playbackRate
             }
         }
@@ -60,13 +61,13 @@ final class PlayerModel: ObservableObject {
                 volume = clamped
                 return
             }
-            player.volume = volume
-            if volume > 0 && isMuted { isMuted = false }
+            if player.volume != volume { player.volume = volume }
+            if !isSynchronizingAudioState, volume > 0, oldValue.isFinite, isMuted { isMuted = false }
         }
     }
 
     @Published var isMuted: Bool = false {
-        didSet { player.isMuted = isMuted }
+        didSet { if player.isMuted != isMuted { player.isMuted = isMuted } }
     }
     let player = AVPlayer()
     
@@ -74,6 +75,10 @@ final class PlayerModel: ObservableObject {
     private var itemStatusObservation: NSKeyValueObservation?
     private var itemDurationObservation: NSKeyValueObservation?
     private var timeControlObservation: NSKeyValueObservation?
+    private var rateObservation: NSKeyValueObservation?
+    private var volumeObservation: NSKeyValueObservation?
+    private var muteObservation: NSKeyValueObservation?
+    private var isSynchronizingAudioState = false
     private var loadTask: Task<Void, Never>?
     private var loadIdentifier = UUID()
     private var preparedMedia: PreparedMedia?
@@ -109,6 +114,37 @@ final class PlayerModel: ObservableObject {
                 self?.isPlaying = player.timeControlStatus == .playing
             }
         }
+        rateObservation = player.observe(\.rate, options: [.new]) { [weak self] player, _ in
+            Task { @MainActor [weak self] in
+                guard let self, !self.isLoading, !self.isFastSeeking,
+                      player.currentItem?.status == .readyToPlay else { return }
+                // Native controls and PiP can change the player without calling
+                // this model. Read the latest rate so old callbacks cannot undo
+                // a newer command; internal hold pauses retain their own intent.
+                let rate = player.rate
+                let requested = rate != 0
+                if self.playbackRequested != requested { self.playbackRequested = requested }
+                if requested {
+                    self.playbackFinished = false
+                    if rate > 0, rate <= 4, self.playbackRate != rate { self.playbackRate = rate }
+                }
+            }
+        }
+        volumeObservation = player.observe(\.volume, options: [.new]) { [weak self] _, _ in
+            Task { @MainActor [weak self] in self?.synchronizeAudioStateFromPlayer() }
+        }
+        muteObservation = player.observe(\.isMuted, options: [.new]) { [weak self] _, _ in
+            Task { @MainActor [weak self] in self?.synchronizeAudioStateFromPlayer() }
+        }
+    }
+
+    private func synchronizeAudioStateFromPlayer() {
+        // Reflect native controls without applying the unmute-on-adjustment
+        // policy reserved for volume changes requested through this model.
+        isSynchronizingAudioState = true
+        defer { isSynchronizingAudioState = false }
+        if volume != player.volume { volume = player.volume }
+        if isMuted != player.isMuted { isMuted = player.isMuted }
     }
     
     deinit {
@@ -174,7 +210,7 @@ final class PlayerModel: ObservableObject {
                 try Task.checkCancellation()
                 guard try await track.load(.isDecodable) else {
                     throw NSError(domain: "SwiftPlayer", code: 1, userInfo: [
-                        NSLocalizedDescriptionKey: "macOS cannot decode this video's codec or resolution."
+                        NSLocalizedDescriptionKey: "This device cannot decode this video's codec or resolution."
                     ])
                 }
             }
@@ -217,6 +253,7 @@ final class PlayerModel: ObservableObject {
                 guard let self, self.player.currentItem === item else { return }
                 self.playbackRequested = false
                 self.endFastSeeking()
+                self.player.pause()
                 self.isPlaying = false
                 self.currentTime = self.duration
                 self.updateSubtitleDisplay()
@@ -237,7 +274,7 @@ final class PlayerModel: ObservableObject {
 
     private func failPlayback(_ error: Error?) {
         teardown()
-        playbackErrorMessage = error?.localizedDescription ?? "macOS could not decode this file."
+        playbackErrorMessage = error?.localizedDescription ?? "This device could not decode this file."
         playbackFailed = true
     }
     
@@ -415,17 +452,3 @@ final class PlayerModel: ObservableObject {
         currentSubtitleText = ""
     }
 }
-
-func formatTime(_ seconds: Double) -> String {
-    guard seconds.isFinite, seconds >= 0, seconds < Double(Int.max) else { return "0:00" }
-    let total = Int(seconds)
-    let h = total / 3600
-    let m = (total % 3600) / 60
-    let s = total % 60
-    if h > 0 {
-        return "\(h):" + String(format: "%02d:%02d", m, s)
-    } else {
-        return String(format: "%d:%02d", m, s)
-    }
-}
-

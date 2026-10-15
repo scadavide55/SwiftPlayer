@@ -57,6 +57,26 @@ final class PlayerLifecycleTests: XCTestCase {
         }
     }
 
+    func testNativePlayerControlsUpdatePlaybackIntentAndSelectedRate() async throws {
+        let model = try await loadedPlayer()
+        defer { model.teardown() }
+        model.player.pause()
+        try await waitUntil { !model.isPlaying }
+        XCTAssertFalse(model.playbackRequested, "Native playback controls must update the shared play/pause intent.")
+        model.playbackRate = 1.5
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(model.player.rate, 0, "Changing speed after a native pause must preserve pause.")
+        model.player.rate = 2
+        try await waitUntil { model.isPlaying }
+        XCTAssertTrue(model.playbackRequested)
+        XCTAssertEqual(model.playbackRate, 2)
+        model.togglePlayPause()
+        XCTAssertEqual(model.player.rate, 0)
+        model.player.play()
+        try await waitUntil { model.isPlaying }
+        XCTAssertTrue(model.playbackRequested)
+    }
+
     func testVolumeClampsInvalidValuesAndUnmutesOnIncrease() {
         let model = PlayerModel()
         model.volume = -1
@@ -73,6 +93,37 @@ final class PlayerLifecycleTests: XCTestCase {
         XCTAssertFalse(model.isMuted)
         XCTAssertFalse(model.player.isMuted)
         XCTAssertEqual(model.player.volume, 0.95, accuracy: 0.001)
+    }
+
+    func testInvalidVolumeChangesPreserveMuteAndTheLastValidVolume() {
+        let model = PlayerModel()
+        for volume: Float in [0.25, 0.5, 1] {
+            for invalid: Float in [.nan, .infinity, -.infinity] {
+                model.volume = volume
+                model.isMuted = true
+                model.volume = invalid
+                XCTAssertEqual(model.volume, volume)
+                XCTAssertEqual(model.player.volume, volume)
+                XCTAssertTrue(model.isMuted)
+                XCTAssertTrue(model.player.isMuted)
+            }
+        }
+    }
+
+    func testNativeGainAndMuteChangesUpdateCoreWithoutUnmuting() async throws {
+        let model = PlayerModel()
+        model.volume = 0.5
+        model.isMuted = true
+        model.player.volume = 0.25
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(model.volume, 0.25)
+        XCTAssertTrue(model.isMuted)
+        XCTAssertTrue(model.player.isMuted)
+        model.player.isMuted = false
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertFalse(model.isMuted)
+        model.volumeUp()
+        XCTAssertEqual(model.player.volume, 0.3, accuracy: 0.001)
     }
 
     func testPausingDuringLoadingPreventsAutoplay() async throws {

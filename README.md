@@ -94,6 +94,25 @@ BOM-marked UTF-16 files are supported. Replacing or closing playback cancels
 pending preparation, seeks, subtitle loading, and held-key seeking, and releases
 the previous media's subtitle and Picture in Picture resources.
 
+## Shared playback core
+
+`SwiftPlayer/PlaybackCore` contains the AVPlayer state model, subtitle parser,
+and HEVC preparation code. It imports Foundation, AVFoundation, Combine, and
+Darwin without a presentation framework. Time formatting remains outside the
+core with the macOS presentation code. This is a shared source group in the
+existing app target, not a separate package or a completed mobile app.
+
+With the corresponding SDKs installed, run `scripts/check-core-platforms.sh`
+to type-check these sources for macOS 13 (Apple Silicon and Intel), iOS/iPadOS 17,
+and visionOS 1. The check was verified with Xcode 27. These checks validate
+source availability; mobile device decoding, audio sessions, interruption and
+route handling, lifecycle integration, and platform presentation still need
+app targets and runtime testing.
+
+The additional core matrix runs 100 scenario/input combinations. Its complete
+run requires both local media environment variables described above. See
+[the core review](CORE_REVIEW_100.md) for the verified fixes and coverage limits.
+
 ## Compatibility
 
 Runs on both **Apple Silicon** and **Intel-based Macs**.  
