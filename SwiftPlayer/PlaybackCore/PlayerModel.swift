@@ -63,13 +63,19 @@ final class PlayerModel: ObservableObject {
             }
             if player.volume != volume { player.volume = volume }
             if !isSynchronizingAudioState, volume > 0, oldValue.isFinite, isMuted { isMuted = false }
+            if preferences?.rememberVolume == true { preferences?.savedVolume = volume }
         }
     }
 
     @Published var isMuted: Bool = false {
-        didSet { if player.isMuted != isMuted { player.isMuted = isMuted } }
+        didSet {
+            if player.isMuted != isMuted { player.isMuted = isMuted }
+            if preferences?.rememberVolume == true { preferences?.savedMute = isMuted }
+        }
     }
-    let player = AVPlayer()
+    let player: AVPlayer
+    let mediaControls: PlayerMediaControls
+    private let preferences: PlayerPreferences?
     
     private var timeObserverToken: Any?
     private var itemStatusObservation: NSKeyValueObservation?
@@ -94,7 +100,18 @@ final class PlayerModel: ObservableObject {
     private var seekIdentifier = UUID()
     private var isSeeking = false
     
-    init() {
+    init(preferences: PlayerPreferences? = nil) {
+        let nativePlayer = AVPlayer()
+        player = nativePlayer
+        self.preferences = preferences
+        mediaControls = PlayerMediaControls(player: nativePlayer, preferences: preferences)
+        mediaControls.onSeek = { [weak self] time in self?.seek(to: time) }
+        if let preferences, preferences.rememberVolume {
+            volume = preferences.savedVolume
+            isMuted = preferences.savedMute
+            player.volume = volume
+            player.isMuted = isMuted
+        }
         let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
         timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
@@ -106,6 +123,7 @@ final class PlayerModel: ObservableObject {
                     if seconds.isFinite { self.currentTime = max(0, seconds) }
                 }
                 self.updateSubtitleDisplay()
+                self.mediaControls.tick(time: self.player.currentTime().seconds, duration: self.duration)
             }
         }
         
@@ -189,7 +207,7 @@ final class PlayerModel: ObservableObject {
                     return
                 }
                 self.preparedMedia = media
-                self.attach(AVPlayerItem(url: media.url))
+                self.attach(AVPlayerItem(url: media.url), sourceURL: url)
                 self.loadTask = nil
             } catch {
                 guard let self, self.loadIdentifier == identifier, !Task.isCancelled else { return }
@@ -222,7 +240,8 @@ final class PlayerModel: ObservableObject {
         }
     }
 
-    private func attach(_ item: AVPlayerItem) {
+    private func attach(_ item: AVPlayerItem, sourceURL: URL) {
+        mediaControls.attach(to: item, sourceURL: sourceURL)
         // Preserve the original pitch for speech and music when playback speed
         // changes, including native controls and accelerated held-key playback.
         item.audioTimePitchAlgorithm = .spectral
@@ -286,6 +305,7 @@ final class PlayerModel: ObservableObject {
     }
 
     func pause() {
+        mediaControls.savePosition()
         playbackRequested = false
         endFastSeeking()
         player.pause()
@@ -386,6 +406,7 @@ final class PlayerModel: ObservableObject {
             guard let self, self.subtitleLoadIdentifier == identifier, !Task.isCancelled else { return }
             self.subtitleCues = cues
             self.subtitlesEnabled = !cues.isEmpty
+            if !cues.isEmpty { self.mediaControls.useExternalSubtitles(named: url.lastPathComponent) }
             self.subtitleLoadTask = nil
         }
     }
@@ -417,6 +438,7 @@ final class PlayerModel: ObservableObject {
     }
     /// Call on window close / app termination to release decoder resources immediately.
     func teardown() {
+        mediaControls.detach()
         playbackRequested = false
         endFastSeeking()
         loadIdentifier = UUID()
