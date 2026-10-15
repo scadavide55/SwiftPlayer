@@ -105,7 +105,7 @@ nonisolated private func parseVTT(_ content: String) -> [SubtitleCue] {
 nonisolated private func parseASS(_ content: String) -> [SubtitleCue] {
     var cues: [SubtitleCue] = []
     let lines = content.components(separatedBy: .newlines)
-    let timePattern = #"^Dialogue:\s*\d+,(\d+):(\d{2}):(\d{2})[.,](\d{2,3}),(\d+):(\d{2}):(\d{2})[.,](\d{2,3}),"#
+    let timePattern = #"^Dialogue:\s*(?:Marked=)?\d+,(\d+):(\d{2}):(\d{2})[.,](\d{2,3}),(\d+):(\d{2}):(\d{2})[.,](\d{2,3}),"#
     guard let regex = try? NSRegularExpression(pattern: timePattern) else { return [] }
 
     for line in lines where line.hasPrefix("Dialogue:") {

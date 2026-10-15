@@ -151,6 +151,17 @@ final class SubtitleParserTests: XCTestCase {
         XCTAssertEqual(cues[0].start, 5.0, accuracy: 0.0001)
     }
 
+    func testLegacySSAParsesMarkedDialogueFields() throws {
+        for marked in [0, 1] {
+            let text = "[Events]\nFormat: Marked, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: Marked=\(marked),0:00:01.25,0:00:03.75,Default,,0,0,0,,Caption, with comma"
+            let cues = try parse(text, as: "ssa")
+            XCTAssertEqual(cues.count, 1)
+            XCTAssertEqual(cues.first?.start, 1.25)
+            XCTAssertEqual(cues.first?.end, 3.75)
+            XCTAssertEqual(cues.first?.text, "Caption, with comma")
+        }
+    }
+
     // MARK: - Dispatch / helpers
 
     func testUnsupportedExtensionReturnsNoCues() throws {
