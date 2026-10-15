@@ -161,6 +161,16 @@ final class SubtitleParserTests: XCTestCase {
         XCTAssertTrue(try parse("no timestamps here at all", as: "srt").isEmpty)
     }
 
+    func testOversizedSubtitleIsRejectedBeforeParsing() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".srt")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data("1\n00:00:00,000 --> 00:00:02,000\nCaption".utf8).write(to: url)
+        let file = try FileHandle(forWritingTo: url)
+        try file.truncate(atOffset: 16 * 1024 * 1024 + 1)
+        try file.close()
+        XCTAssertTrue(parseSubtitles(from: url).isEmpty)
+    }
+
     func testFormatTime() {
         XCTAssertEqual(formatTime(0), "0:00")
         XCTAssertEqual(formatTime(65), "1:05")
