@@ -362,7 +362,7 @@ final class PlayerModel: ObservableObject {
         var upper = subtitleMaximumEnds.count
         while lower < upper {
             let middle = lower + (upper - lower) / 2
-            if subtitleMaximumEnds[middle] < adjustedTime { lower = middle + 1 }
+            if subtitleMaximumEnds[middle] <= adjustedTime { lower = middle + 1 }
             else { upper = middle }
         }
         var text = ""
@@ -370,7 +370,7 @@ final class PlayerModel: ObservableObject {
             for index in subtitleOrder[lower...] {
                 let cue = subtitleCues[index]
                 if cue.start > adjustedTime { break }
-                if cue.end >= adjustedTime { text = cue.text; break }
+                if cue.end > adjustedTime { text = cue.text; break }
             }
         }
         if currentSubtitleText != text { currentSubtitleText = text }
