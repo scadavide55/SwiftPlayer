@@ -87,7 +87,7 @@ final class MediaControlsTests: XCTestCase {
         defer { model.teardown() }
         model.load(url: URL(fileURLWithPath: path))
         model.pause()
-        try await wait { model.player.currentItem?.status == .readyToPlay && !model.mediaControls.isDiscovering || model.playbackFailed }
+        try await wait { model.player.currentItem?.status == .readyToPlay && !model.isLoading && !model.mediaControls.isDiscovering || model.playbackFailed }
         XCTAssertFalse(model.playbackFailed)
         let controls = model.mediaControls
         XCTAssertTrue(controls.informationError.isEmpty)
@@ -195,4 +195,24 @@ final class MediaControlsTests: XCTestCase {
         try await wait { model.player.currentItem?.status == .readyToPlay && model.duration > 0 }
         XCTAssertLessThan(model.player.currentTime().seconds, 0.5)
     }
+    func testAutomaticFullSubtitleSelectionSurvivesTenLoadsWhenProvided() async throws {
+        guard let path = ProcessInfo.processInfo.environment["SWIFTPLAYER_TEST_HD_MEDIA"] else {
+            throw XCTSkip("Provide the local HD track-selection fixture.")
+        }
+        let model = PlayerModel()
+        defer { model.teardown() }
+        for _ in 0..<10 {
+            model.load(url: URL(fileURLWithPath: path))
+            model.pause()
+            try await wait { !model.isLoading && !model.mediaControls.isDiscovering && model.player.currentItem?.status == .readyToPlay }
+            try await Task.sleep(for: .milliseconds(50))
+            let item = try XCTUnwrap(model.player.currentItem)
+            let loaded = try await item.asset.loadMediaSelectionGroup(for: .legible)
+            let group = try XCTUnwrap(loaded)
+            let selection = try XCTUnwrap(item.currentMediaSelection.selectedMediaOption(in: group))
+            XCTAssertFalse(selection.hasMediaCharacteristic(.containsOnlyForcedSubtitles))
+            model.teardown()
+        }
+    }
+
 }

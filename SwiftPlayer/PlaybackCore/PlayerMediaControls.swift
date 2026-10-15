@@ -134,8 +134,10 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
                 self.audioTracks = Self.choices(audio, prefix: "audio")
                 self.chapters = chapters
                 self.streams = streams
-                self.applySubtitleSelection()
-                self.applyAudioSelection()
+                if item.status == .readyToPlay {
+                    self.applySubtitleSelection()
+                    self.applyAudioSelection()
+                }
                 self.isDiscovering = false
                 self.discoveryTask = nil
             } catch {
@@ -145,6 +147,12 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
                 self.discoveryTask = nil
             }
         }
+    }
+
+    func itemBecameReady(_ readyItem: AVPlayerItem) {
+        guard item === readyItem else { return }
+        applySubtitleSelection()
+        applyAudioSelection()
     }
 
     private static func choices(_ group: AVMediaSelectionGroup?, prefix: String) -> [MediaTrackChoice] {
