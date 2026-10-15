@@ -88,6 +88,16 @@ final class SubtitleParserTests: XCTestCase {
         XCTAssertEqual(cues[0].end, 64.5, accuracy: 0.0001)
     }
 
+    func testVTTRejectsOverflowingHoursInsteadOfTreatingThemAsZero() throws {
+        let overflow = String(repeating: "9", count: 30)
+        for (start, end) in [("\(overflow):00:01.000", "00:00:02.000"),
+                             ("00:00:01.000", "\(overflow):00:02.000")] {
+            XCTAssertTrue(try parse("WEBVTT\n\n\(start) --> \(end)\nInvalid", as: "vtt").isEmpty)
+        }
+        let valid = try parse("WEBVTT\n\n100:00:01.000 --> 100:00:02.000\nLong form", as: "vtt")
+        XCTAssertEqual(valid.first?.start, 360_001)
+    }
+
     func testUTF16Subtitle() throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".srt")
         defer { try? FileManager.default.removeItem(at: url) }
@@ -149,6 +159,17 @@ final class SubtitleParserTests: XCTestCase {
 
         XCTAssertEqual(cues.count, 1)
         XCTAssertEqual(cues[0].start, 5.0, accuracy: 0.0001)
+    }
+
+    func testLegacySSAParsesMarkedDialogueFields() throws {
+        for marked in [0, 1] {
+            let text = "[Events]\nFormat: Marked, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: Marked=\(marked),0:00:01.25,0:00:03.75,Default,,0,0,0,,Caption, with comma"
+            let cues = try parse(text, as: "ssa")
+            XCTAssertEqual(cues.count, 1)
+            XCTAssertEqual(cues.first?.start, 1.25)
+            XCTAssertEqual(cues.first?.end, 3.75)
+            XCTAssertEqual(cues.first?.text, "Caption, with comma")
+        }
     }
 
     // MARK: - Dispatch / helpers

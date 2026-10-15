@@ -291,6 +291,22 @@ final class PlayerLifecycleTests: XCTestCase {
         XCTAssertEqual(changes, ["Caption", "", "Caption", ""])
     }
 
+    func testCaptionTransitionsExcludeThePreviousCueEndTime() {
+        let model = PlayerModel()
+        model.subtitleCues = [SubtitleCue(start: 0, end: 1, text: "First"),
+                              SubtitleCue(start: 1, end: 2, text: "Second")]
+        model.subtitlesEnabled = true
+        model.currentTime = 1
+        model.updateSubtitleDisplay()
+        XCTAssertEqual(model.currentSubtitleText, "Second")
+        model.currentTime = 2
+        model.updateSubtitleDisplay()
+        XCTAssertEqual(model.currentSubtitleText, "")
+        model.currentTime = 0.5
+        model.updateSubtitleDisplay()
+        XCTAssertEqual(model.currentSubtitleText, "First")
+    }
+
     func testLoadingNewMediaClearsOldSubtitlesAndErrors() async throws {
         let model = PlayerModel()
         defer { model.teardown() }
@@ -506,7 +522,7 @@ final class PlayerLifecycleTests: XCTestCase {
         for time in [9_999.25, 5_000.75, 2.25, 999.5, 0, 10_030, 100.2] {
             model.currentTime = time
             model.updateSubtitleDisplay()
-            XCTAssertEqual(model.currentSubtitleText, cues.first { $0.start <= time && $0.end >= time }?.text ?? "")
+            XCTAssertEqual(model.currentSubtitleText, cues.first { $0.start <= time && $0.end > time }?.text ?? "")
         }
     }
 
