@@ -132,32 +132,20 @@ final class MediaControlsTests: XCTestCase {
         model.seek(to: try XCTUnwrap(subtitleTime))
         model.play()
         try await wait({ !controls.embeddedText.isEmpty }, seconds: 20)
+        model.pause()
+        let caption = controls.embeddedText
+        settings.appearance.fontFamily = "Helvetica"
+        settings.appearance.size = 30
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertTrue(controls.embeddedText == caption, "Changing appearance must not clear the current embedded caption.")
+        settings.subtitleLanguage = "fr"
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertTrue(controls.embeddedText == caption, "Keeping the same selected track must preserve its current caption.")
         controls.subtitleSelection = "off"
         XCTAssertTrue(controls.embeddedText.isEmpty)
         model.teardown()
         XCTAssertTrue(controls.subtitleTracks.isEmpty)
         XCTAssertTrue(controls.audioTracks.isEmpty)
-    }
-    func testPausedResumeRestoresPositionWithoutStartingPlaybackWhenProvided() async throws {
-        guard let path = ProcessInfo.processInfo.environment["SWIFTPLAYER_TEST_CHAPTER_MEDIA"] else {
-            throw XCTSkip("Provide the synthetic chapter and language fixture.")
-        }
-        let source = URL(fileURLWithPath: path)
-        let settings = PlayerPreferences(defaults: defaults)
-        settings.resumePlayback = true
-        settings.savePosition(6, duration: 20, for: source)
-        let model = PlayerModel(preferences: settings)
-        defer { model.teardown() }
-        model.load(url: source)
-        model.pause()
-        try await wait { model.player.currentItem?.status == .readyToPlay && model.duration > 0 }
-        try await wait { abs(model.player.currentTime().seconds - 6) < 0.5 }
-        XCTAssertEqual(model.player.rate, 0)
-        settings.resumePlayback = false
-        model.load(url: source)
-        model.pause()
-        try await wait { model.player.currentItem?.status == .readyToPlay && model.duration > 0 }
-        XCTAssertLessThan(model.player.currentTime().seconds, 0.5)
     }
     func testChaptersAndAudioLanguageWhenProvided() async throws {
         guard let path = ProcessInfo.processInfo.environment["SWIFTPLAYER_TEST_CHAPTER_MEDIA"] else {
@@ -186,4 +174,25 @@ final class MediaControlsTests: XCTestCase {
         XCTAssertEqual(model.player.rate, 0)
     }
 
+    func testPausedResumeRestoresPositionWithoutStartingPlaybackWhenProvided() async throws {
+        guard let path = ProcessInfo.processInfo.environment["SWIFTPLAYER_TEST_CHAPTER_MEDIA"] else {
+            throw XCTSkip("Provide the synthetic chapter and language fixture.")
+        }
+        let source = URL(fileURLWithPath: path)
+        let settings = PlayerPreferences(defaults: defaults)
+        settings.resumePlayback = true
+        settings.savePosition(6, duration: 20, for: source)
+        let model = PlayerModel(preferences: settings)
+        defer { model.teardown() }
+        model.load(url: source)
+        model.pause()
+        try await wait { model.player.currentItem?.status == .readyToPlay && model.duration > 0 }
+        try await wait { abs(model.player.currentTime().seconds - 6) < 0.5 }
+        XCTAssertEqual(model.player.rate, 0)
+        settings.resumePlayback = false
+        model.load(url: source)
+        model.pause()
+        try await wait { model.player.currentItem?.status == .readyToPlay && model.duration > 0 }
+        XCTAssertLessThan(model.player.currentTime().seconds, 0.5)
+    }
 }

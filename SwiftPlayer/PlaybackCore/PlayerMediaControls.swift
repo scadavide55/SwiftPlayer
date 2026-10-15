@@ -43,6 +43,8 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
     private weak var item: AVPlayerItem?
     private let preferences: PlayerPreferences?
     private var preferenceObserver: AnyCancellable?
+    private var observedSubtitleLanguage: String
+    private var observedAudioLanguage: String
     private var discoveryTask: Task<Void, Never>?
     private var identifier = UUID()
     private var subtitleGroup: AVMediaSelectionGroup?
@@ -55,12 +57,22 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
     init(player: AVPlayer, preferences: PlayerPreferences?) {
         self.player = player
         self.preferences = preferences
+        observedSubtitleLanguage = preferences?.subtitleLanguage ?? ""
+        observedAudioLanguage = preferences?.audioLanguage ?? ""
         super.init()
         preferenceObserver = preferences?.objectWillChange.sink { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                if self.subtitleSelection == "automatic" { self.applySubtitleSelection() }
-                if self.audioSelection == "automatic" { self.applyAudioSelection() }
+                let subtitleLanguage = self.preferences?.subtitleLanguage ?? ""
+                let audioLanguage = self.preferences?.audioLanguage ?? ""
+                if subtitleLanguage != self.observedSubtitleLanguage {
+                    self.observedSubtitleLanguage = subtitleLanguage
+                    if self.subtitleSelection == "automatic" { self.applySubtitleSelection() }
+                }
+                if audioLanguage != self.observedAudioLanguage {
+                    self.observedAudioLanguage = audioLanguage
+                    if self.audioSelection == "automatic" { self.applyAudioSelection() }
+                }
             }
         }
     }
@@ -154,16 +166,22 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
     }
 
     private func applySubtitleSelection() {
-        embeddedText = ""
+        if subtitleSelection == "off" || subtitleSelection == "external" { embeddedText = "" }
         guard let item, let group = subtitleGroup else { return }
+        let option: AVMediaSelectionOption?
         switch subtitleSelection {
-        case "off", "external": item.select(nil, in: group)
+        case "off", "external": option = nil
         case "automatic":
             let full = subtitleTracks.filter { !$0.forcedOnly }
             let choice = preferred(full, language: preferences?.subtitleLanguage ?? "") ?? full.first ?? subtitleTracks.first
-            item.select(choice?.option, in: group)
+            option = choice?.option
         default:
-            if let choice = subtitleTracks.first(where: { $0.id == subtitleSelection }) { item.select(choice.option, in: group) }
+            guard let choice = subtitleTracks.first(where: { $0.id == subtitleSelection }) else { return }
+            option = choice.option
+        }
+        if item.currentMediaSelection.selectedMediaOption(in: group) != option {
+            embeddedText = ""
+            item.select(option, in: group)
         }
     }
 
