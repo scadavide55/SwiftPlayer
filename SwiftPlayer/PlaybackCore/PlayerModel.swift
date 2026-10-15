@@ -16,6 +16,7 @@ final class PlayerModel: ObservableObject {
     @Published var currentTime: Double = 0
     @Published var duration: Double = 0
     @Published var isScrubbing: Bool = false
+    @Published private(set) var sourceURL: URL?
     @Published var currentFileName: String = ""
     @Published var subtitleCues: [SubtitleCue] = [] {
         didSet {
@@ -32,7 +33,10 @@ final class PlayerModel: ObservableObject {
         didSet { updateSubtitleDisplay() }
     }
     @Published var subtitleOffset: Double = 0.0 {
-        didSet { updateSubtitleDisplay() }
+        didSet {
+            if mediaControls.subtitleDelay != subtitleOffset { mediaControls.subtitleDelay = subtitleOffset }
+            updateSubtitleDisplay()
+        }
     }
     @Published var currentSubtitleText: String = ""
     @Published var playbackFailed: Bool = false
@@ -115,6 +119,10 @@ final class PlayerModel: ObservableObject {
         self.preferences = preferences
         mediaControls = PlayerMediaControls(player: nativePlayer, preferences: preferences)
         mediaControls.onSeek = { [weak self] time in self?.seek(to: time) }
+        mediaControls.onSubtitleDelayChanged = { [weak self] delay in
+            if self?.subtitleOffset != delay { self?.subtitleOffset = delay }
+        }
+        mediaControls.onRestoreExternalSubtitles = { [weak self] url in self?.loadSubtitles(url: url) }
         if let preferences {
             audioProcessingObservation = preferences.$limitAudioPeaks.combineLatest(preferences.$normalizeAudio)
                 .sink { [weak self] limiter, normalization in
@@ -218,6 +226,7 @@ final class PlayerModel: ObservableObject {
     
     func load(url: URL) {
         teardown()
+        sourceURL = url
         currentTime = 0
         duration = 0
         playbackFailed = false
@@ -454,14 +463,23 @@ final class PlayerModel: ObservableObject {
         let identifier = subtitleLoadIdentifier
         let selectionRevision = mediaControls.subtitleSelectionRevision
         subtitleLoadTask = Task { [weak self] in
-            let worker = Task.detached(priority: .userInitiated) { parseSubtitles(from: url) }
-            let cues = await withTaskCancellationHandler {
+            let worker = Task.detached(priority: .userInitiated) {
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                return (parseSubtitles(from: url), SubtitleFileReference.capture(url))
+            }
+            let (cues, reference) = await withTaskCancellationHandler {
                 await worker.value
             } onCancel: { worker.cancel() }
             guard let self, self.subtitleLoadIdentifier == identifier, !Task.isCancelled else { return }
             self.subtitleCues = cues
             self.subtitlesEnabled = !cues.isEmpty
-            if !cues.isEmpty { self.mediaControls.useExternalSubtitles(named: url.lastPathComponent, activate: self.mediaControls.subtitleSelectionRevision == selectionRevision) }
+            if !cues.isEmpty {
+                self.mediaControls.useExternalSubtitles(named: url.lastPathComponent, reference: reference,
+                    activate: self.mediaControls.subtitleSelectionRevision == selectionRevision)
+            } else if self.mediaControls.subtitleSelectionRevision == selectionRevision {
+                self.mediaControls.externalSubtitlesUnavailable()
+            }
             self.subtitleLoadTask = nil
         }
     }
@@ -527,6 +545,7 @@ final class PlayerModel: ObservableObject {
         currentTime = 0
         duration = 0
         currentFileName = ""
+        sourceURL = nil
         subtitleCues = []
         subtitlesEnabled = false
         subtitleOffset = 0

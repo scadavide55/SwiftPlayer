@@ -94,6 +94,7 @@ struct PlayerPreferencesView: View {
                     Toggle("Normalize audio level", isOn: $preferences.normalizeAudio)
                     Text("Normalization balances quiet and loud passages. Peak protection reduces distortion when boosting volume.")
                         .font(.caption).foregroundStyle(.secondary)
+                    Toggle("Remember tracks and subtitle timing for each file", isOn: $preferences.rememberFileSettings)
                     Toggle("Remember volume and mute", isOn: $preferences.rememberVolume)
                     Picker("After playback", selection: $preferences.afterPlayback) {
                         ForEach(EndOfPlaybackAction.allCases) { Text($0.title).tag($0) }

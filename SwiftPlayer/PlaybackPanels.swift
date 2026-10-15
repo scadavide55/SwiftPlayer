@@ -40,6 +40,7 @@ struct SubtitlePanel: View {
                 Text("Subtitle delay: \(model.subtitleOffset, specifier: "%+.1f") s").monospacedDigit()
                 Slider(value: $model.subtitleOffset, in: -30...30, step: 0.1).accessibilityLabel("External subtitle delay")
             }
+            if !media.subtitleStatusMessage.isEmpty { Text(media.subtitleStatusMessage).font(.caption).foregroundStyle(.secondary) }
             if media.isDiscovering { ProgressView("Finding tracks…") }
         }.padding(16).frame(width: 340)
     }
