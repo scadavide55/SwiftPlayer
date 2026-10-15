@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 struct ControlsOverlay: View {
     @ObservedObject var model: PlayerModel
@@ -45,6 +46,7 @@ struct ControlsOverlay: View {
             ScrubberView(
                 currentTime: $model.currentTime,
                 duration: model.duration,
+                asset: model.player.currentItem?.asset,
                 onScrubStart: { model.isScrubbing = true },
                 onScrubEnd: { newTime in
                     model.seek(to: newTime)
