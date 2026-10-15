@@ -94,11 +94,12 @@ final class PlayerLifecycleTests: XCTestCase {
     func testNativePauseAtReadinessIsNotOverwrittenByInitialAutoplay() async throws {
         let model = PlayerModel()
         defer { model.teardown() }
-        for _ in 0..<40 {
+        for _ in 0..<200 {
             model.load(url: source)
             try await waitUntil { model.player.currentItem?.status == .readyToPlay && model.duration > 0 }
             model.play()
             model.player.pause()
+            XCTAssertFalse(model.playbackRequested, "Native pause must update intent before queued readiness work runs")
             try await waitUntil { !model.isLoading }
             try await Task.sleep(for: .milliseconds(20))
             XCTAssertEqual(model.player.rate, 0)
@@ -132,16 +133,17 @@ final class PlayerLifecycleTests: XCTestCase {
         XCTAssertEqual(model.volume, 0)
         XCTAssertEqual(model.player.volume, 0)
         model.volume = 10
-        XCTAssertEqual(model.volume, 1)
+        XCTAssertEqual(model.volume, 2)
         model.volume = .nan
-        XCTAssertEqual(model.volume, 1)
+        XCTAssertEqual(model.volume, 2)
         model.volume = .infinity
-        XCTAssertEqual(model.volume, 1)
+        XCTAssertEqual(model.volume, 2)
         model.isMuted = true
         model.volumeDown()
+        XCTAssertEqual(model.volume, 1.95, accuracy: 0.001)
         XCTAssertFalse(model.isMuted)
         XCTAssertFalse(model.player.isMuted)
-        XCTAssertEqual(model.player.volume, 0.95, accuracy: 0.001)
+        XCTAssertEqual(model.player.volume, 1, accuracy: 0.001)
     }
 
     func testInvalidVolumeChangesPreserveMuteAndTheLastValidVolume() {

@@ -61,17 +61,23 @@ struct ControlsOverlay: View {
                 Button {
                     model.isMuted.toggle()
                 } label: {
-                    Image(systemName: model.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                    Image(systemName: model.isMuted || model.volume == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill")
                         .font(.system(size: 13))
                         .foregroundStyle(.white)
                         .frame(width: 18)
                 }
                 .buttonStyle(.plain)
                 
-                Slider(value: $model.volume, in: 0...1)
+                Slider(value: $model.volume, in: 0...model.maximumVolume, step: 0.05)
+                    .accessibilityLabel("Volume")
+                    .accessibilityValue("\(Int((model.volume * 100).rounded())) percent")
                     .frame(width: 70)
                     .controlSize(.mini)
                 
+                Text("\(Int((model.volume * 100).rounded()))%")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.white)
+                    .frame(width: 36, alignment: .trailing)
                 Menu {
                     ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { rate in
                         Button {

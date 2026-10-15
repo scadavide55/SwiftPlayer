@@ -49,7 +49,7 @@ final class PlaybackDebugMatrixTests: DebugMatrixTestCase {
                         model.volume = Float(variant + 2)
                         XCTAssertEqual(model.player.volume, 1)
                         model.volume = .nan
-                        XCTAssertEqual(model.volume, 1)
+                        XCTAssertEqual(model.volume, model.maximumVolume)
                         XCTAssertEqual(model.player.volume, 1)
                     case 6:
                         NotificationCenter.default.post(name: .AVPlayerItemDidPlayToEndTime, object: model.player.currentItem)
