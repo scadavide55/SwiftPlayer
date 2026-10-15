@@ -61,13 +61,13 @@ final class PlayerModel: ObservableObject {
                 volume = clamped
                 return
             }
-            player.volume = volume
-            if volume > 0 && oldValue.isFinite && isMuted { isMuted = false }
+            if player.volume != volume { player.volume = volume }
+            if !isSynchronizingAudioState, volume > 0, oldValue.isFinite, isMuted { isMuted = false }
         }
     }
 
     @Published var isMuted: Bool = false {
-        didSet { player.isMuted = isMuted }
+        didSet { if player.isMuted != isMuted { player.isMuted = isMuted } }
     }
     let player = AVPlayer()
     
@@ -76,6 +76,9 @@ final class PlayerModel: ObservableObject {
     private var itemDurationObservation: NSKeyValueObservation?
     private var timeControlObservation: NSKeyValueObservation?
     private var rateObservation: NSKeyValueObservation?
+    private var volumeObservation: NSKeyValueObservation?
+    private var muteObservation: NSKeyValueObservation?
+    private var isSynchronizingAudioState = false
     private var loadTask: Task<Void, Never>?
     private var loadIdentifier = UUID()
     private var preparedMedia: PreparedMedia?
@@ -127,6 +130,21 @@ final class PlayerModel: ObservableObject {
                 }
             }
         }
+        volumeObservation = player.observe(\.volume, options: [.new]) { [weak self] _, _ in
+            Task { @MainActor [weak self] in self?.synchronizeAudioStateFromPlayer() }
+        }
+        muteObservation = player.observe(\.isMuted, options: [.new]) { [weak self] _, _ in
+            Task { @MainActor [weak self] in self?.synchronizeAudioStateFromPlayer() }
+        }
+    }
+
+    private func synchronizeAudioStateFromPlayer() {
+        // Reflect native controls without applying the unmute-on-adjustment
+        // policy reserved for volume changes requested through this model.
+        isSynchronizingAudioState = true
+        defer { isSynchronizingAudioState = false }
+        if volume != player.volume { volume = player.volume }
+        if isMuted != player.isMuted { isMuted = player.isMuted }
     }
     
     deinit {

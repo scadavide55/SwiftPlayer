@@ -110,6 +110,22 @@ final class PlayerLifecycleTests: XCTestCase {
         }
     }
 
+    func testNativeGainAndMuteChangesUpdateCoreWithoutUnmuting() async throws {
+        let model = PlayerModel()
+        model.volume = 0.5
+        model.isMuted = true
+        model.player.volume = 0.25
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(model.volume, 0.25)
+        XCTAssertTrue(model.isMuted)
+        XCTAssertTrue(model.player.isMuted)
+        model.player.isMuted = false
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertFalse(model.isMuted)
+        model.volumeUp()
+        XCTAssertEqual(model.player.volume, 0.3, accuracy: 0.001)
+    }
+
     func testPausingDuringLoadingPreventsAutoplay() async throws {
         let model = PlayerModel()
         defer { model.teardown() }
