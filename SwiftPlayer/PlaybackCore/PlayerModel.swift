@@ -223,6 +223,9 @@ final class PlayerModel: ObservableObject {
     }
 
     private func attach(_ item: AVPlayerItem) {
+        // Preserve the original pitch for speech and music when playback speed
+        // changes, including native controls and accelerated held-key playback.
+        item.audioTimePitchAlgorithm = .spectral
         itemDurationObservation = item.observe(\.duration, options: [.new, .initial]) { [weak self] item, _ in
             Task { @MainActor [weak self] in
                 guard let self, self.player.currentItem === item else { return }
