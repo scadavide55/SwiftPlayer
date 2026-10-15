@@ -1,6 +1,5 @@
 import XCTest
 import AVFoundation
-import AppKit
 import Combine
 import Darwin
 @testable import SwiftPlayer

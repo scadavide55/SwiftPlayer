@@ -1,5 +1,5 @@
 import AVFoundation
-import SwiftUI
+import Foundation
 import Combine
 
 /// Extensions AVFoundation can natively decode (container-level allow-list
@@ -210,7 +210,7 @@ final class PlayerModel: ObservableObject {
                 try Task.checkCancellation()
                 guard try await track.load(.isDecodable) else {
                     throw NSError(domain: "SwiftPlayer", code: 1, userInfo: [
-                        NSLocalizedDescriptionKey: "macOS cannot decode this video's codec or resolution."
+                        NSLocalizedDescriptionKey: "This device cannot decode this video's codec or resolution."
                     ])
                 }
             }
@@ -274,7 +274,7 @@ final class PlayerModel: ObservableObject {
 
     private func failPlayback(_ error: Error?) {
         teardown()
-        playbackErrorMessage = error?.localizedDescription ?? "macOS could not decode this file."
+        playbackErrorMessage = error?.localizedDescription ?? "This device could not decode this file."
         playbackFailed = true
     }
     
@@ -452,17 +452,3 @@ final class PlayerModel: ObservableObject {
         currentSubtitleText = ""
     }
 }
-
-func formatTime(_ seconds: Double) -> String {
-    guard seconds.isFinite, seconds >= 0, seconds < Double(Int.max) else { return "0:00" }
-    let total = Int(seconds)
-    let h = total / 3600
-    let m = (total % 3600) / 60
-    let s = total % 60
-    if h > 0 {
-        return "\(h):" + String(format: "%02d:%02d", m, s)
-    } else {
-        return String(format: "%d:%02d", m, s)
-    }
-}
-
