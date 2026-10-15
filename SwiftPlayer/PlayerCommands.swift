@@ -3,13 +3,25 @@ import AppKit
 import AVFoundation
 import UniformTypeIdentifiers
 
-struct PlayerWindowContext {
-    let model: PlayerModel
+struct PlayerWindowContext: Equatable {
+    let menus: PlayerMenuState
     let open: (URL) -> Void
     let jump: () -> Void
     let information: () -> Void
     let subtitles: () -> Void
     let appearance: () -> Void
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.menus === rhs.menus }
+}
+
+/// Keep the scene's command target stable as its playback view redraws.
+struct PlayerCommandFocus: View, Equatable {
+    let context: PlayerWindowContext
+    var body: some View {
+        Color.clear.frame(width: 0, height: 0)
+            .focusedSceneValue(\.playerWindow, context)
+            .accessibilityHidden(true)
+    }
 }
 private struct PlayerWindowKey: FocusedValueKey { typealias Value = PlayerWindowContext }
 extension FocusedValues {
@@ -22,6 +34,7 @@ extension FocusedValues {
 struct PlayerCommands: Commands {
     @FocusedValue(\.playerWindow) private var window
     @ObservedObject private var recent = RecentMediaStore.shared
+    @StateObject private var inactive = PlayerMenuState()
     @ObservedObject private var preferences = PlayerPreferences.shared
     @Environment(\.openWindow) private var openWindow
     var body: some Commands {
@@ -46,28 +59,18 @@ struct PlayerCommands: Commands {
             }
         }
         CommandMenu("Playback") {
-            if let window {
-                PlaybackMenu(model: window.model, media: window.model.mediaControls, jump: window.jump)
-            } else { Text("No Active Player") }
+            PlaybackMenu(state: window?.menus ?? inactive, jump: { window?.jump() })
         }
         CommandMenu("Audio") {
-            if let window {
-                AudioMenu(model: window.model, media: window.model.mediaControls, preferences: preferences)
-            } else { Text("No Active Player") }
+            AudioMenu(state: window?.menus ?? inactive, preferences: preferences)
         }
         CommandMenu("Subtitles") {
-            if let window {
-                SubtitleSelectionPicker(media: window.model.mediaControls)
-                    .disabled(window.model.player.currentItem == nil)
-                Button("Load Subtitle File…", action: window.subtitles).disabled(window.model.player.currentItem == nil)
-                LanguagePreferencePicker(title: "Preferred Language", selection: $preferences.subtitleLanguage)
-                Divider()
-                Button("Appearance and Fonts…", action: window.appearance)
-            } else { Text("No Active Player") }
+            SubtitlesMenu(state: window?.menus ?? inactive, preferences: preferences,
+                          load: { window?.subtitles() }, appearance: { window?.appearance() })
+                .disabled(window == nil)
         }
         CommandGroup(after: .windowArrangement) {
-            Button("Media Information…") { window?.information() }.keyboardShortcut("i")
-                .disabled(window?.model.player.currentItem == nil)
+            MediaInformationCommand(state: window?.menus ?? inactive, action: { window?.information() })
         }
     }
     private func pickFile() {
@@ -79,35 +82,74 @@ struct PlayerCommands: Commands {
     }
 }
 
-private struct PlaybackMenu: View {
-    @ObservedObject var model: PlayerModel
-    @ObservedObject var media: PlayerMediaControls
+struct PlaybackMenu: View {
+    @ObservedObject var state: PlayerMenuState
     let jump: () -> Void
     var body: some View {
-        Button(model.playbackRequested ? "Pause" : "Play") { model.togglePlayPause() }
-            .disabled(model.player.currentItem == nil)
-        Picker("Speed", selection: $model.playbackRate) {
+        Button(state.snapshot.playbackRequested ? "Pause" : "Play") { state.model?.togglePlayPause() }
+            .disabled(!state.snapshot.hasMedia)
+        Picker("Speed", selection: Binding(get: { state.snapshot.playbackRate }, set: { state.model?.playbackRate = $0 })) {
             ForEach([Float(0.5), 0.75, 1, 1.25, 1.5, 2, 3, 4], id: \.self) { Text(formatPlaybackRate($0)).tag($0) }
-        }.disabled(model.player.currentItem == nil)
-        Button("Jump to Time…", action: jump).keyboardShortcut("j").disabled(model.duration <= 0)
+        }.disabled(!state.snapshot.hasMedia)
+        Divider()
+        Button("Jump to Time…", action: jump).keyboardShortcut("j").disabled(!state.snapshot.canNavigate)
         Menu("Chapters") {
-            ForEach(media.chapters) { chapter in Button("\(formatTime(chapter.start)) · \(chapter.title)") { model.seek(to: chapter.start) } }
-        }.disabled(media.chapters.isEmpty)
-        Button("Back 10 Seconds") { model.seek(to: model.currentTime - 10) }.disabled(model.duration <= 0)
-        Button("Forward 10 Seconds") { model.seek(to: model.currentTime + 10) }.disabled(model.duration <= 0)
+            ForEach(state.snapshot.chapters) { chapter in
+                Button("\(formatTime(chapter.start)) · \(chapter.title)") { state.model?.seek(to: chapter.start) }
+            }
+        }.disabled(state.snapshot.chapters.isEmpty)
+        Button("Back 10 Seconds") {
+            if let model = state.model { model.seek(to: model.currentTime - 10) }
+        }.disabled(!state.snapshot.canNavigate)
+        Button("Forward 10 Seconds") {
+            if let model = state.model { model.seek(to: model.currentTime + 10) }
+        }.disabled(!state.snapshot.canNavigate)
     }
 }
 
-private struct AudioMenu: View {
-    @ObservedObject var model: PlayerModel
-    @ObservedObject var media: PlayerMediaControls
+struct AudioMenu: View {
+    @ObservedObject var state: PlayerMenuState
     @ObservedObject var preferences: PlayerPreferences
     var body: some View {
-        AudioSelectionPicker(media: media).disabled(media.audioTracks.isEmpty)
+        Picker("Audio Track", selection: Binding(get: { state.snapshot.audioSelection }, set: { state.model?.mediaControls.audioSelection = $0 })) {
+            Text("Automatic").tag("automatic")
+            ForEach(state.snapshot.audioTracks) { Text($0.name).tag($0.id) }
+        }.disabled(state.snapshot.audioTracks.isEmpty)
         LanguagePreferencePicker(title: "Preferred Language", selection: $preferences.audioLanguage)
         Divider()
-        Toggle("Mute", isOn: $model.isMuted)
-        Button("Increase Volume") { model.volumeUp() }
-        Button("Decrease Volume") { model.volumeDown() }
+        Toggle("Mute", isOn: Binding(get: { state.snapshot.isMuted }, set: { state.model?.isMuted = $0 }))
+            .disabled(state.model == nil)
+        Button("Increase Volume") { state.model?.volumeUp() }.disabled(state.model == nil)
+        Button("Decrease Volume") { state.model?.volumeDown() }.disabled(state.model == nil)
+    }
+}
+
+struct SubtitlesMenu: View {
+    @ObservedObject var state: PlayerMenuState
+    @ObservedObject var preferences: PlayerPreferences
+    let load: () -> Void
+    let appearance: () -> Void
+    var body: some View {
+        Picker("Subtitle Track", selection: Binding(get: { state.snapshot.subtitleSelection }, set: { state.model?.mediaControls.subtitleSelection = $0 })) {
+            Text("Off").tag("off")
+            Text("Automatic").tag("automatic")
+            ForEach(state.snapshot.subtitleTracks) { Text($0.name).tag($0.id) }
+            if !state.snapshot.externalSubtitleName.isEmpty {
+                Text("External: \(state.snapshot.externalSubtitleName)").tag("external")
+            }
+        }.disabled(!state.snapshot.hasMedia)
+        Button("Load Subtitle File…", action: load).disabled(!state.snapshot.hasMedia)
+        LanguagePreferencePicker(title: "Preferred Language", selection: $preferences.subtitleLanguage)
+        Divider()
+        Button("Appearance and Fonts…", action: appearance)
+    }
+}
+
+private struct MediaInformationCommand: View {
+    @ObservedObject var state: PlayerMenuState
+    let action: () -> Void
+    var body: some View {
+        Button("Media Information…", action: action).keyboardShortcut("i")
+            .disabled(!state.snapshot.hasMedia)
     }
 }

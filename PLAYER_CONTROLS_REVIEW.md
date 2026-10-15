@@ -85,3 +85,28 @@ all languages, audiovisual synchronization, or unlimited-duration playback.
 Preferences, recent bookmarks, and saved positions remain in local app storage.
 Actual media content, identifying filenames and paths, screenshots of that
 content, and raw diagnostic logs are excluded from repository changes.
+
+## Menu stability follow-up — October 16, 2026
+
+Playback ticks and decoded captions previously invalidated menu views through
+broad observations of the player and media controllers. The scene's command
+context was also reconstructed with each playback-view update. A dedicated
+macOS menu adapter now publishes only changed command state; an equatable focus
+view keeps each window's command context stable. Playback and caption updates
+continue reaching the player UI without rebuilding tracked menus.
+
+Playback, Audio, and Subtitles retain their commands when no player window is
+active, disabling unavailable actions rather than substituting a placeholder.
+This follows Apple's [menu-bar guidance](https://developer.apple.com/design/human-interface-guidelines/the-menu-bar)
+on consistent command placement and availability. Standard menus and shortcuts
+remain intact; playback navigation is separated from transport controls.
+
+Verification: 99 tests and all 900 numbered scenarios passed with zero failures
+or skips, including local HD/8K checks. The menu regression delivers 100 rounds
+of time, external-caption, and embedded-caption updates without a menu change,
+then verifies speed, mute, and subtitle changes still update commands. Separate
+checks cover distinct window targets and release of closed menu/player owners.
+Release build and static analysis passed. Native accessibility inspection
+confirmed the same Playback menu entries through loading, playback, ending,
+and Settings focus, with unavailable commands disabled. Screen capture was
+unavailable, so no pixel-level visual verification is claimed.
