@@ -211,7 +211,9 @@ final class PlayerModel: ObservableObject {
             object: item,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor [weak self] in
+            // NotificationCenter delivers this observer on the main queue. Handle
+            // it immediately so it cannot overtake a subsequent seek or replay.
+            MainActor.assumeIsolated {
                 guard let self, self.player.currentItem === item else { return }
                 self.playbackRequested = false
                 self.endFastSeeking()

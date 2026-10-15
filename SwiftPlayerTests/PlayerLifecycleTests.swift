@@ -201,6 +201,34 @@ final class PlayerLifecycleTests: XCTestCase {
         XCTAssertLessThan(model.currentTime, 3)
     }
 
+    func testQueuedEndNotificationDoesNotOverrideANewerSeek() async throws {
+        let model = try await loadedPlayer()
+        defer { model.teardown() }
+        model.pause()
+        let item = try XCTUnwrap(model.player.currentItem)
+        NotificationCenter.default.post(name: .AVPlayerItemDidPlayToEndTime, object: item)
+        model.seek(to: 3)
+        model.play()
+        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertFalse(model.playbackFinished)
+        XCTAssertTrue(model.playbackRequested)
+        XCTAssertLessThan(model.currentTime, 5)
+    }
+
+    func testNaturalEndStopsPlaybackAndPlayRestartsFromBeginning() async throws {
+        let model = try await loadedPlayer()
+        defer { model.teardown() }
+        model.seek(to: model.duration - 0.2)
+        try await waitUntil { model.playbackFinished }
+        XCTAssertFalse(model.playbackRequested)
+        XCTAssertFalse(model.isPlaying)
+        XCTAssertEqual(model.currentTime, model.duration, accuracy: 0.1)
+        model.play()
+        try await waitUntil { model.isPlaying && model.player.currentTime().seconds < 2 }
+        XCTAssertFalse(model.playbackFinished)
+        XCTAssertTrue(model.playbackRequested)
+    }
+
     func testTeardownReleasesStateAndCancelsSubtitles() async throws {
         let model = try await loadedPlayer()
         let subtitles = source.deletingPathExtension().appendingPathExtension("srt")
