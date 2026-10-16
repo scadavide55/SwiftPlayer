@@ -8,6 +8,7 @@ struct PlayerWindowContext: Equatable {
     let viewing: PlayerWindowControls
     let capture: FrameCaptureController
     let open: (URL) -> Void
+    let history: () -> Void
     let jump: () -> Void
     let information: () -> Void
     let subtitles: () -> Void
@@ -46,6 +47,8 @@ struct PlayerCommands: Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Player Window") { openWindow(id: "player") }.keyboardShortcut("n")
             Button("Open File…") { pickFile() }.keyboardShortcut("o").disabled(window == nil)
+            Button("Playback History…") { window?.history() }
+                .keyboardShortcut("h", modifiers: [.command, .shift]).disabled(window == nil)
             Menu("Open Recent") {
                 if recent.entries.isEmpty { Text("No Recent Files") }
                 ForEach(recent.entries) { entry in

@@ -27,6 +27,8 @@ A minimal, fully native video and audio player for macOS built with SwiftUI and 
 - **Frame capture** – Save or copy a PNG of the current video frame, optionally including styled text subtitles.
 - **Legacy subtitle encodings** – Preview Big5, GB18030, or Shift-JIS subtitles before loading, and remember the successful encoding per media file.
 - **Display sleep prevention** – Optionally keep the display awake only while video plays. Pausing, closing, or replacing it with audio-only playback releases the request.
+- **Playback history** – Search watched files, filter unfinished/finished items, see progress, and explicitly continue from a saved position. Local history has configurable retention and clear/disable controls.
+- **Live playback information** – Inspect playback/waiting state, reported buffer ranges, presentation size, and app-wide memory while the Playback information tab is visible.
 - **Navigation and preferences** – Jump to a time, navigate chapters, reopen recent files, and optionally remember volume, mute, and playback position.
 - **Media information** – Inspect codecs, resolution, frame rate, audio channels, and subtitle tracks from the Window menu.
 - **Minimal UI** – Clean interface that fades away when idle, keeps focus on your content
@@ -116,8 +118,9 @@ the previous media's subtitle and Picture in Picture resources.
 
 `SwiftPlayer/PlaybackCore` contains the AVPlayer state model, subtitle parser,
 and HEVC preparation code, along with media preferences, audio processing, and
-thumbnail generation. It imports Foundation, AVFoundation, Combine, CoreGraphics,
-and Darwin without a presentation framework. Time formatting remains outside the
+thumbnail generation, bounded history, and diagnostic sampling. It uses Foundation,
+AVFoundation, Combine, CoreGraphics/CoreText, ImageIO, UniformTypeIdentifiers,
+CoreFoundation, and Darwin without a presentation framework. Time formatting remains outside the
 core with the macOS presentation code. This is a shared source group in the
 existing app target, not a separate package or a completed mobile app.
 
@@ -135,6 +138,7 @@ run requires both local media environment variables described above. See
 ## Playback menus and settings
 
 - **File → Open File…** (`⌘O`) or **Open Recent** opens one file. Recent files use read-only security-scoped bookmarks, with up to ten entries. A multiple-file queue is deferred.
+- **File → Playback History…** (`⇧⌘H`) searches up to 200 files, with All/Unfinished/Finished filters and per-file progress. Continue explicitly restores progress independently of automatic resume; finished files open from the beginning. Missing files remain listed until removed or expired. History is recorded by default, with 90-day retention; General settings offers 30/90/365 days, disable, and Clear History. Turning history off clears its list and progress. Clear/remove also invalidates existing playback sessions so they cannot silently recreate removed entries.
 - **Playback → Jump to Time…** (`⌘J`) accepts seconds, minutes:seconds, or hours:minutes:seconds. Chapter navigation appears when the file supplies chapter titles. Changing position preserves pause.
 - **Audio → Audio track** selects an embedded audio track. The preferred language applies while the selector is Automatic.
 - **Subtitles → Subtitle track** offers Off, Automatic, embedded choices, and a loaded external file. Automatic prefers a full subtitle option in the preferred language, falling back to the first full option before forced-only captions. Explicit track choices take precedence over language preferences.
@@ -143,8 +147,8 @@ run requires both local media environment variables described above. See
 - **Playback → After Playback** selects Stay at End, Rewind and Pause, Repeat File, or Close File. The same preference is available in General settings.
 - **Video** offers Always on Top, Fit/Fill, Original/16:9/4:3/21:9/1:1 aspect ratios, and window-size presets. The 50%/100%/200% presets account for Retina scaling and fit within the screen's visible area. These presentation choices apply to the main window; PiP retains native video presentation. Always on Top is suspended in fullscreen and restored on exit.
 - **Video → Capture Frame** saves a PNG through the system save dialog or copies it to the clipboard. Include Subtitles is off by default. Exports use the original video frame with its preferred orientation, independent of window scaling, at full resolution up to 8192 pixels per side; larger frames are downscaled. PNG output uses sRGB SDR color. Text captions use the current font, color, outline, background, and position, with size scaled for the exported image. No controls or window decorations are included.
-- **Window → Media Information…** (`⌘I`) shows the current file's streams and duration.
-- **SwiftPlayer → Settings…** (`⌘,`) saves language and appearance preferences, sets the maximum volume from 100% to 400% (200% by default), controls whether volume/mute are remembered, and enables optional resume. Turning resume off clears saved positions. Positions near the start or end are not resumed.
+- **Window → Media Information…** (`⌘I`) shows the current file's streams and duration. Select Playback for live state, waiting reason, selected/player/effective clock rates, native buffer flags, reported loaded ranges/time ahead, presentation size, and app memory across all windows. Player Rate is the native requested rate; Effective Clock Speed reads the media timebase and can be zero while waiting. Sampling runs once per second only while that tab is visible. Local files may not report loaded ranges; unavailable values are labeled accordingly. Stream frame rates are nominal media metadata; live renderer and dropped-frame counters are not collected.
+- **SwiftPlayer → Settings…** (`⌘,`) saves language and appearance preferences, sets the maximum volume from 100% to 400% (200% by default), controls whether volume/mute are remembered, and enables optional automatic resume. Turning automatic resume off clears its separate saved positions. History progress is controlled separately. Automatic resume excludes positions near the start or end.
 
 100% is the original audio level. Higher values amplify decoded audio through
 AVFoundation audio taps, without changing the system volume or creating a
@@ -166,6 +170,15 @@ Language preferences supply the fallback when a saved track is unavailable.
 The selected external subtitle encoding is also remembered. Changing encoding
 from the Subtitles menu reloads the file; a failed decode preserves existing
 captions and the last successful encoding. Off stays Off during a reload.
+
+History checkpoints progress at most once every ten seconds during playback,
+with additional saves on pause, completed paused seeks, EOF, and close. Recording
+starts only after a file becomes ready. Failed loads are not added. Entries,
+read-only bookmarks, and progress stay in local app preferences; no media or
+diagnostic logs are uploaded. History and automatic resume have separate clear
+controls. Retention pruning runs when history is loaded, updated, or its retention
+setting changes. See [the history and diagnostics review](HISTORY_DIAGNOSTICS_REVIEW.md)
+for verification and limits.
 
 Seek previews use a throttled native image generator with relaxed image-extraction
 tolerance. Their memory-only image cache is limited to 32 thumbnails and 8 MiB,
