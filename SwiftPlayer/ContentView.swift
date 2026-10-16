@@ -123,7 +123,8 @@ private struct PlayerContentView: View {
     private var playingState: some View {
             ZStack(alignment: .topLeading) {
                 ZStack(alignment: .bottom) {
-                    PlayerLayerView(player: model.player, display: windowControls.display) { layer in
+                    PlayerLayerView(player: model.player, display: windowControls.display,
+                                    onDoubleClick: { registerActivity(); toggleFullScreen() }) { layer in
                         pipController.attach(to: layer)
                     }
                     .ignoresSafeArea()
