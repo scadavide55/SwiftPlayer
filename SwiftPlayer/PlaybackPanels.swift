@@ -78,6 +78,7 @@ struct MediaInformationView: View {
     @ObservedObject var model: PlayerModel
     @ObservedObject var media: PlayerMediaControls
     @Environment(\.dismiss) private var dismiss
+    @State private var section = "Streams"
     private func codec(_ value: String) -> String {
         switch value { case "hvc1", "hev1": return "HEVC (H.265)"; case "avc1": return "H.264"; case "mp4a", "aac ", "aac": return "AAC"; case "tx3g": return "Timed text"; case "wvtt": return "WebVTT"; default: return value }
     }
@@ -86,15 +87,23 @@ struct MediaInformationView: View {
             Text("Media Information").font(.title2)
             Text(model.currentFileName).font(.headline).textSelection(.enabled)
             Text("Duration: \(formatTime(model.duration))")
-            if media.isDiscovering { ProgressView("Reading media information…") }
-            if !media.informationError.isEmpty { Text(media.informationError).foregroundStyle(.secondary) }
-            List(media.streams) { stream in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("\(stream.kind) · \(codec(stream.codec))").font(.headline)
-                    Text(stream.details).foregroundStyle(.secondary)
-                }.padding(.vertical, 4)
+            Picker("Information", selection: $section) {
+                Text("Streams").tag("Streams")
+                Text("Playback").tag("Playback")
+            }.pickerStyle(.segmented)
+            if section == "Playback" {
+                PlaybackDiagnosticsView(model: model)
+            } else {
+                if media.isDiscovering { ProgressView("Reading media information…") }
+                if !media.informationError.isEmpty { Text(media.informationError).foregroundStyle(.secondary) }
+                List(media.streams) { stream in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(stream.kind) · \(codec(stream.codec))").font(.headline)
+                        Text(stream.details).foregroundStyle(.secondary)
+                    }.padding(.vertical, 4)
+                }
             }
             HStack { Spacer(); Button("Done") { dismiss() }.keyboardShortcut(.defaultAction) }
-        }.padding(20).frame(width: 480, height: 400)
+        }.padding(20).frame(width: 540, height: 530)
     }
 }
