@@ -86,20 +86,13 @@ struct PlayerPreferencesView: View {
                 }
                 Section("Playback") {
                     Toggle("Keep the display awake while video plays", isOn: $preferences.keepDisplayAwake)
-                    HStack {
-                        Text("Maximum volume")
-                        Slider(value: $preferences.maximumVolume, in: 1...4, step: 0.05)
-                            .accessibilityLabel("Maximum volume")
-                            .accessibilityValue("\(Int((preferences.maximumVolume * 100).rounded())) percent")
-                        Text("\(Int((preferences.maximumVolume * 100).rounded()))%")
-                            .monospacedDigit().frame(width: 44, alignment: .trailing)
-                    }
-                    Toggle("Protect boosted audio peaks", isOn: $preferences.limitAudioPeaks)
+                    Text("The volume keys and slider control Mac system volume for all apps, from 0% to 100%.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Toggle("Protect audio peaks", isOn: $preferences.limitAudioPeaks)
                     Toggle("Normalize audio level", isOn: $preferences.normalizeAudio)
-                    Text("Normalization balances quiet and loud passages. Peak protection reduces distortion when boosting volume.")
+                    Text("Normalization balances quiet and loud passages. Peak protection reduces distortion during processing.")
                         .font(.caption).foregroundStyle(.secondary)
                     Toggle("Remember tracks and subtitle timing for each file", isOn: $preferences.rememberFileSettings)
-                    Toggle("Remember volume and mute", isOn: $preferences.rememberVolume)
                     Picker("After playback", selection: $preferences.afterPlayback) {
                         ForEach(EndOfPlaybackAction.allCases) { Text($0.title).tag($0) }
                     }

@@ -4,7 +4,8 @@ import UniformTypeIdentifiers
 import AVFoundation
 
 struct ContentView: View {
-    @StateObject private var menuState = PlayerMenuState(model: PlayerModel(preferences: PlayerPreferences.shared, history: .shared))
+    @StateObject private var menuState = PlayerMenuState(model: PlayerModel(preferences: PlayerPreferences.shared,
+        history: .shared, restoreApplicationVolume: false))
 
     var body: some View {
         if let model = menuState.model {
@@ -17,6 +18,7 @@ private struct PlayerContentView: View {
     @ObservedObject var model: PlayerModel
     let menuState: PlayerMenuState
     @ObservedObject private var preferences = PlayerPreferences.shared
+    @ObservedObject private var systemVolume = SystemVolumeController.shared
     @StateObject private var pipController = PiPController()
     @StateObject private var subtitleSearch = SubtitleSearchController()
     @StateObject private var displaySleep = DisplaySleepController()
@@ -181,11 +183,11 @@ private struct PlayerContentView: View {
                 )
                 .background(MouseActivityTracker(onActivity: registerActivity))
                 .background(KeyEventHandlingView(
-                    onSpace: { model.togglePlayPause() },
+                    onSpace: { registerActivity(); model.togglePlayPause() },
                     onArrowDown: { direction in handleArrowDown(direction: direction) },
                     onArrowUp: { handleArrowUp() },
-                    onVolumeUp: { model.volumeUp() },
-                    onVolumeDown: { model.volumeDown() },
+                    onVolumeUp: { registerActivity(); systemVolume.increase() },
+                    onVolumeDown: { registerActivity(); systemVolume.decrease() },
                     onFrameStep: { direction in model.stepFrame(direction: direction); registerActivity() }
                 ))
                 .onAppear {

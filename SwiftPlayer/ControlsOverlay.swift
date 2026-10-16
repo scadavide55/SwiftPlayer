@@ -3,6 +3,7 @@ import AVFoundation
 
 struct ControlsOverlay: View {
     @ObservedObject var model: PlayerModel
+    @ObservedObject var systemVolume: SystemVolumeController = .shared
     
     var body: some View {
         HStack(spacing: 12) {
@@ -61,22 +62,27 @@ struct ControlsOverlay: View {
             
             HStack(spacing: 8) {
                 Button {
-                    model.isMuted.toggle()
+                    systemVolume.toggleMute()
                 } label: {
-                    Image(systemName: model.isMuted || model.volume == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                    Image(systemName: systemVolume.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                         .font(.system(size: 13))
                         .foregroundStyle(.white)
                         .frame(width: 18)
                 }
                 .buttonStyle(.plain)
+                .disabled(!systemVolume.canSetMute)
+                .help("Mute the Mac's system audio")
                 
-                Slider(value: $model.volume, in: 0...model.maximumVolume, step: 0.05)
-                    .accessibilityLabel("Volume")
-                    .accessibilityValue("\(Int((model.volume * 100).rounded())) percent")
+                Slider(value: Binding(get: { systemVolume.volume }, set: { systemVolume.setVolume($0) }),
+                       in: 0...1, step: 0.05)
+                    .accessibilityLabel("System Volume")
+                    .accessibilityValue(systemVolume.canSetVolume ? "\(Int((systemVolume.volume * 100).rounded())) percent" : "Unavailable")
+                    .disabled(!systemVolume.canSetVolume)
+                    .help(systemVolume.statusMessage.isEmpty ? "Mac system volume · affects all apps" : systemVolume.statusMessage)
                     .frame(width: 70)
                     .controlSize(.mini)
                 
-                Text("\(Int((model.volume * 100).rounded()))%")
+                Text(systemVolume.canSetVolume ? "\(Int((systemVolume.volume * 100).rounded()))%" : "—")
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(.white)
                     .frame(width: 36, alignment: .trailing)

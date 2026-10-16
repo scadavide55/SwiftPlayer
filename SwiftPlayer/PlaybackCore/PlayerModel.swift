@@ -127,7 +127,8 @@ final class PlayerModel: ObservableObject {
     private var seekIdentifier = UUID()
     private(set) var isSeeking = false
     
-    init(preferences: PlayerPreferences? = nil, history: PlaybackHistoryStore? = nil) {
+    init(preferences: PlayerPreferences? = nil, history: PlaybackHistoryStore? = nil,
+         restoreApplicationVolume: Bool = true) {
         let nativePlayer = AVPlayer()
         player = nativePlayer
         self.preferences = preferences
@@ -161,7 +162,7 @@ final class PlayerModel: ObservableObject {
                 self.isSynchronizingAudioState = false
             }
         }
-        if let preferences, preferences.rememberVolume {
+        if restoreApplicationVolume, let preferences, preferences.rememberVolume {
             volume = preferences.savedVolume
             isMuted = preferences.savedMute
             player.volume = min(volume, 1)

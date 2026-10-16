@@ -167,6 +167,7 @@ struct PlaybackMenu: View {
 struct AudioMenu: View {
     @ObservedObject var state: PlayerMenuState
     @ObservedObject var preferences: PlayerPreferences
+    @ObservedObject private var systemVolume = SystemVolumeController.shared
     var body: some View {
         Picker("Audio Track", selection: Binding(get: { state.snapshot.audioSelection }, set: { state.model?.mediaControls.audioSelection = $0 })) {
             Text("Automatic").tag("automatic")
@@ -174,10 +175,10 @@ struct AudioMenu: View {
         }.disabled(state.snapshot.audioTracks.isEmpty)
         LanguagePreferencePicker(title: "Preferred Language", selection: $preferences.audioLanguage)
         Divider()
-        Toggle("Mute", isOn: Binding(get: { state.snapshot.isMuted }, set: { state.model?.isMuted = $0 }))
-            .disabled(state.model == nil)
-        Button("Increase Volume") { state.model?.volumeUp() }.disabled(state.model == nil)
-        Button("Decrease Volume") { state.model?.volumeDown() }.disabled(state.model == nil)
+        Toggle("Mute System Audio", isOn: Binding(get: { systemVolume.isMuted }, set: { systemVolume.setMuted($0) }))
+            .disabled(!systemVolume.canSetMute)
+        Button("Increase System Volume") { systemVolume.increase() }.disabled(!systemVolume.canSetVolume)
+        Button("Decrease System Volume") { systemVolume.decrease() }.disabled(!systemVolume.canSetVolume)
     }
 }
 
