@@ -123,6 +123,7 @@ final class PlayerModel: ObservableObject {
     private var subtitleOrder: [Int] = []
     private var fastSeekTask: Task<Void, Never>?
     private var fastSeekDirection: Int?
+    private var fastSeekRate: Float?
     private var seekIdentifier = UUID()
     private var isSeeking = false
     
@@ -209,9 +210,15 @@ final class PlayerModel: ObservableObject {
     }
 
     private func synchronizePlaybackIntent(from player: AVPlayer, item: AVPlayerItem) {
-        guard !isFastSeeking, player.currentItem === item, item.status == .readyToPlay else { return }
+        guard player.currentItem === item, item.status == .readyToPlay else { return }
         // Background callbacks can arrive later; always read the latest rate.
         let rate = player.rate
+        if isFastSeeking {
+            // Ignore our own hold transport, but let native controls interrupt
+            // it without restoring the old rate over the user's new command.
+            guard rate != fastSeekRate else { return }
+            cancelFastSeekTask()
+        }
         let requested = rate != 0
         if playbackRequested != requested {
             if !requested { saveHistory(force: true) }
@@ -493,10 +500,14 @@ final class PlayerModel: ObservableObject {
                 try Task.checkCancellation()
                 self?.isFastSeeking = true
                 if direction > 0, self?.playbackRequested == true {
-                    if let rate = self?.playbackRate { self?.player.rate = rate * 4 }
+                    if let rate = self?.playbackRate {
+                        self?.fastSeekRate = rate * 4
+                        self?.player.rate = rate * 4
+                    }
                     return
                 }
                 // Reverse scrubbing must not compete with normal forward playback.
+                self?.fastSeekRate = 0
                 self?.player.pause()
                 while !Task.isCancelled {
                     guard let time = self?.currentTime, let duration = self?.duration,
@@ -508,12 +519,18 @@ final class PlayerModel: ObservableObject {
         }
     }
 
-    func endFastSeeking() {
+    private func cancelFastSeekTask() {
         fastSeekTask?.cancel()
         fastSeekTask = nil
         fastSeekDirection = nil
-        guard isFastSeeking else { return }
+        fastSeekRate = nil
         isFastSeeking = false
+    }
+
+    func endFastSeeking() {
+        let wasFastSeeking = isFastSeeking
+        cancelFastSeekTask()
+        guard wasFastSeeking else { return }
         if playbackRequested, player.currentItem?.status == .readyToPlay {
             player.rate = playbackRate
         } else {
