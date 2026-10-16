@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 struct PlayerWindowContext: Equatable {
     let menus: PlayerMenuState
+    let viewing: PlayerWindowControls
     let open: (URL) -> Void
     let jump: () -> Void
     let information: () -> Void
@@ -36,6 +37,7 @@ struct PlayerCommands: Commands {
     @FocusedValue(\.playerWindow) private var window
     @ObservedObject private var recent = RecentMediaStore.shared
     @StateObject private var inactive = PlayerMenuState()
+    @StateObject private var inactiveViewing = PlayerWindowControls()
     @ObservedObject private var preferences = PlayerPreferences.shared
     @Environment(\.openWindow) private var openWindow
     var body: some Commands {
@@ -65,6 +67,9 @@ struct PlayerCommands: Commands {
         CommandMenu("Audio") {
             AudioMenu(state: window?.menus ?? inactive, preferences: preferences)
         }
+        CommandMenu("Video") {
+            VideoMenu(viewing: window?.viewing ?? inactiveViewing)
+        }
         CommandMenu("Subtitles") {
             SubtitlesMenu(state: window?.menus ?? inactive, preferences: preferences,
                           load: { window?.subtitles() }, find: { window?.findSubtitles() }, appearance: { window?.appearance() })
@@ -80,6 +85,32 @@ struct PlayerCommands: Commands {
         panel.canChooseDirectories = false
         panel.allowedContentTypes = supportedExtensions.compactMap { UTType(filenameExtension: $0) }
         if panel.runModal() == .OK, let url = panel.url { window?.open(url) }
+    }
+}
+
+struct VideoMenu: View {
+    @ObservedObject var viewing: PlayerWindowControls
+    var body: some View {
+        Button(viewing.isFullScreen ? "Exit Full Screen" : "Enter Full Screen") { viewing.toggleFullScreen() }
+            .keyboardShortcut("f", modifiers: [.command, .control])
+            .disabled(!viewing.isAttached || viewing.isTransitioning)
+        Toggle("Always on Top", isOn: $viewing.alwaysOnTop)
+            .disabled(!viewing.isAttached || viewing.isFullScreen || viewing.isTransitioning)
+        Divider()
+        Picker("Video Scaling", selection: $viewing.display.fit) {
+            ForEach(VideoFit.allCases) { Text($0.title).tag($0) }
+        }.disabled(!viewing.hasVideo)
+        Picker("Aspect Ratio", selection: $viewing.display.aspect) {
+            ForEach(VideoAspect.allCases) { Text($0.title).tag($0) }
+        }.disabled(!viewing.hasVideo)
+        Divider()
+        Menu("Window Size") {
+            Button("Half Size (50%)") { viewing.resize(scale: 0.5) }
+            Button("Original Size (100%)") { viewing.resize(scale: 1) }
+            Button("Double Size (200%)") { viewing.resize(scale: 2) }
+            Divider()
+            Button("Fit to Screen") { viewing.resize(scale: nil) }
+        }.disabled(!viewing.canResize)
     }
 }
 

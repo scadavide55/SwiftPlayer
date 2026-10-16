@@ -3,35 +3,46 @@ import AppKit
 
 /// Associates playback controls with the window that actually contains them.
 struct PlayerWindowObserver: NSViewRepresentable {
-    let onFullScreenChanged: (Bool) -> Void
+    var onFullScreenChanged: (Bool) -> Void = { _ in }
     let onResignKey: () -> Void
+    var onWindowChanged: (NSWindow?) -> Void = { _ in }
 
     func makeNSView(context: Context) -> ObservingView {
         let view = ObservingView()
         view.onFullScreenChanged = onFullScreenChanged
         view.onResignKey = onResignKey
+        view.onWindowChanged = onWindowChanged
         return view
     }
 
     func updateNSView(_ view: ObservingView, context: Context) {
         view.onFullScreenChanged = onFullScreenChanged
         view.onResignKey = onResignKey
+        view.onWindowChanged = onWindowChanged
     }
 
     static func dismantleNSView(_ view: ObservingView, coordinator: ()) {
         view.invalidate()
         view.onFullScreenChanged = nil
         view.onResignKey = nil
+        let windowChanged = view.onWindowChanged
+        Task { @MainActor in windowChanged?(nil) }
+        view.onWindowChanged = nil
     }
 
     final class ObservingView: NSView {
         var onFullScreenChanged: ((Bool) -> Void)?
         var onResignKey: (() -> Void)?
+        var onWindowChanged: ((NSWindow?) -> Void)?
         private var observers: [NSObjectProtocol] = []
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             invalidate()
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.onWindowChanged?(self.window)
+            }
             guard window != nil else { return }
             // Publish initial state after SwiftUI finishes attaching its native view.
             Task { @MainActor [weak self] in

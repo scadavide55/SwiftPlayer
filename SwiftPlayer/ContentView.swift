@@ -20,6 +20,7 @@ private struct PlayerContentView: View {
     @StateObject private var pipController = PiPController()
     @StateObject private var subtitleSearch = SubtitleSearchController()
     @StateObject private var displaySleep = DisplaySleepController()
+    @StateObject private var windowControls = PlayerWindowControls()
     @ObservedObject private var subtitleFolders = SubtitleFolderStore.shared
     @State private var showSubtitleMatches = false
     @State private var hasLoadedFile: Bool = false
@@ -35,7 +36,6 @@ private struct PlayerContentView: View {
     @State private var showHomeConfirm: Bool = false
     @State private var showSubtitlePanel: Bool = false
     @State private var subtitleImport: SubtitleImportRequest?
-    @State private var isFullScreen: Bool = false
     @State private var showAppearance = false
     @State private var showJump = false
     @State private var showInformation = false
@@ -50,7 +50,7 @@ private struct PlayerContentView: View {
                 }
             }
         }
-        .background(PlayerCommandFocus(context: PlayerWindowContext(menus: menuState, open: requestOpen,
+        .background(PlayerCommandFocus(context: PlayerWindowContext(menus: menuState, viewing: windowControls, open: requestOpen,
             jump: { showJump = true }, information: { showInformation = true },
             subtitles: openSubtitlePicker, findSubtitles: {
                 showSubtitleMatches = true
@@ -82,11 +82,14 @@ private struct PlayerContentView: View {
         .onChange(of: preferences.autoFindSubtitles) { _ in startSubtitleSearch(automatic: true) }
         .onChange(of: preferences.subtitleLanguage) { _ in startSubtitleSearch(automatic: true) }
         .onChange(of: model.closedAtEnd) { closed in if closed { goHome() } }
-        .onAppear { displaySleep.attach(model: model, preferences: preferences) }
+        .onAppear {
+            displaySleep.attach(model: model, preferences: preferences)
+            windowControls.observe(model.player)
+        }
         .onChange(of: pipController.isActive) { active in model.mediaControls.nativeSubtitleRendering = active }
         .frame(minWidth: 480, minHeight: 320)
-        .background(PlayerWindowObserver(onFullScreenChanged: { isFullScreen = $0 },
-                                         onResignKey: { stopInteractions() }))
+        .background(PlayerWindowObserver(onResignKey: { stopInteractions() },
+                                         onWindowChanged: { windowControls.attach($0) }))
         .alert("Replace current video?", isPresented: $showReplaceConfirm, presenting: pendingReplacementURL) { url in
             Button("Replace", role: .destructive) {
                 load(url: url)
@@ -99,6 +102,7 @@ private struct PlayerContentView: View {
         }
         .onDisappear {
             displaySleep.detach()
+            windowControls.detach()
             subtitleSearch.cancel()
             stopInteractions()
             pipController.detach()
@@ -119,7 +123,7 @@ private struct PlayerContentView: View {
     private var playingState: some View {
             ZStack(alignment: .topLeading) {
                 ZStack(alignment: .bottom) {
-                    PlayerLayerView(player: model.player) { layer in
+                    PlayerLayerView(player: model.player, display: windowControls.display) { layer in
                         pipController.attach(to: layer)
                     }
                     .ignoresSafeArea()
@@ -230,7 +234,7 @@ private struct PlayerContentView: View {
                                     Button {
                                         toggleFullScreen()
                                     } label: {
-                                        Image(systemName: isFullScreen
+                                        Image(systemName: windowControls.isFullScreen
                                               ? "arrow.down.right.and.arrow.up.left"
                                               : "arrow.up.left.and.arrow.down.right")
                                             .font(.system(size: 14, weight: .semibold))
@@ -254,7 +258,7 @@ private struct PlayerContentView: View {
 
                                     }
                                     .buttonStyle(.plain)
-                                    .help(isFullScreen ? "Exit Full Screen" : "Enter Full Screen")
+                                    .help(windowControls.isFullScreen ? "Exit Full Screen" : "Enter Full Screen")
 
                                     Button {
                                         showSubtitlePanel = true
@@ -297,7 +301,7 @@ private struct PlayerContentView: View {
     }
 
     private func toggleFullScreen() {
-        NSApplication.shared.keyWindow?.toggleFullScreen(nil)
+        windowControls.toggleFullScreen()
     }
 
     private func handleArrowDown(direction: Int) {

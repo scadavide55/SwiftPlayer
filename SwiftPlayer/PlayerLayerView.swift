@@ -8,12 +8,14 @@ final class PlayerLayerNSView: NSView {
     /// Called once the layer is set up and laid out, so we can hand it to a PiP controller.
     var onLayerReady: ((AVPlayerLayer) -> Void)?
     private var didNotifyLayerReady = false
+    var display = VideoDisplayOptions() { didSet { needsLayout = true } }
     
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
         layer = CALayer()
         layer?.backgroundColor = NSColor.black.cgColor
+        layer?.masksToBounds = true
         playerLayer.videoGravity = .resizeAspect
         layer?.addSublayer(playerLayer)
     }
@@ -26,7 +28,8 @@ final class PlayerLayerNSView: NSView {
         super.layout()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        playerLayer.frame = bounds
+        playerLayer.videoGravity = display.aspect == .original ? (display.fit == .fit ? .resizeAspect : .resizeAspectFill) : .resize
+        playerLayer.frame = display.frame(in: bounds)
         CATransaction.commit()
         
         if !didNotifyLayerReady, let onLayerReady {
@@ -38,11 +41,13 @@ final class PlayerLayerNSView: NSView {
 
 struct PlayerLayerView: NSViewRepresentable {
     let player: AVPlayer
+    var display = VideoDisplayOptions()
     var onLayerReady: ((AVPlayerLayer) -> Void)?
     
     func makeNSView(context: Context) -> PlayerLayerNSView {
         let view = PlayerLayerNSView()
         view.playerLayer.player = player
+        view.display = display
         view.onLayerReady = onLayerReady
         return view
     }
@@ -52,6 +57,7 @@ struct PlayerLayerView: NSViewRepresentable {
             nsView.playerLayer.player = player
         }
         nsView.onLayerReady = onLayerReady
+        if nsView.display != display { nsView.display = display }
     }
 
     static func dismantleNSView(_ nsView: PlayerLayerNSView, coordinator: ()) {
