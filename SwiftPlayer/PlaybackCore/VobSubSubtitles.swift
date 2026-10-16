@@ -87,11 +87,15 @@ nonisolated enum VobSubParser {
             try file.seek(toOffset: entry.offset)
             let nextOffset = entryIndex + 1 < track.entries.count ? track.entries[entryIndex + 1].offset : length
             guard nextOffset > entry.offset, nextOffset <= length else { throw SubtitleDecodingError.invalid }
-            let data = try file.read(upToCount: Int(min(128 * 1024, nextOffset - entry.offset))) ?? Data()
-            readBytes += data.count
-            guard readBytes <= 1024 * 1024 * 1024 else { throw SubtitleDecodingError.limit }
-            let packet = try subpicture(data, stream: 0x20 + track.id)
-            let decoded = try decode(packet, at: entry.time, canvas: index.canvas, palette: index.palette)
+            let decoded = try autoreleasepool {
+                // Discard PES read/padding buffers between entries while keeping
+                // the decoded cue's independently owned compressed subpicture.
+                let data = try file.read(upToCount: Int(min(128 * 1024, nextOffset - entry.offset))) ?? Data()
+                readBytes += data.count
+                guard readBytes <= 1024 * 1024 * 1024 else { throw SubtitleDecodingError.limit }
+                let packet = try subpicture(data, stream: 0x20 + track.id)
+                return try decode(packet, at: entry.time, canvas: index.canvas, palette: index.palette)
+            }
             if let previous = cues.last, previous.end > entry.time { cues[cues.count - 1].end = entry.time }
             for cue in decoded { retainedBytes += cue.bitmap?.parts.reduce(0, { $0 + $1.bytes.count + $1.palette.count }) ?? 0 }
             cues += decoded
