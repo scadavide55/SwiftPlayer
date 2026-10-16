@@ -519,25 +519,25 @@ final class PlayerModel: ObservableObject {
         skip(by: Double(direction) * 5)
         fastSeekTask = Task { [weak self] in
             do {
-                try await Task.sleep(for: .milliseconds(800))
+                try await Task.sleep(for: .milliseconds(500))
                 try Task.checkCancellation()
                 self?.isFastSeeking = true
                 if direction > 0, self?.playbackRequested == true {
                     if let rate = self?.playbackRate {
-                        self?.fastSeekRate = rate * 4
-                        self?.player.rate = rate * 4
+                        self?.fastSeekRate = rate
                     }
-                    return
+                } else {
+                    // Reverse jumps must not compete with forward decoding;
+                    // release restores the existing playback intent and rate.
+                    self?.fastSeekRate = 0
+                    self?.player.pause()
                 }
-                // Reverse scrubbing must not compete with normal forward playback.
-                self?.fastSeekRate = 0
-                self?.player.pause()
                 while !Task.isCancelled {
                     guard let time = self?.currentTime, let duration = self?.duration,
                           direction < 0 ? time > 0 : time < duration else { return }
-                    guard let target = self?.skip(by: Double(direction)),
+                    guard let target = self?.skip(by: Double(direction) * 5),
                           direction < 0 ? target > 0 : target < duration else { return }
-                    try await Task.sleep(for: .milliseconds(200))
+                    try await Task.sleep(for: .milliseconds(100))
                 }
             } catch { /* Releasing a key or closing playback cancels the hold. */ }
         }

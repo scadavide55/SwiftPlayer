@@ -261,7 +261,7 @@ Tested on: MacBook Air 2020 (Intel Core i3, dual-core) and MacBook Air M5 (2026)
 ## Keyboard Shortcuts
 
 - **Space** – Play/pause
-- **Left/Right Arrow** – Jump back/forward 5 seconds (hold to fast-seek)
+- **Left/Right Arrow** – Jump back/forward 5 seconds immediately; holding waits 0.5 seconds, then repeats the jump every 0.1 seconds. Release preserves the playing/paused state and selected playback speed.
 - **Control–Left/Right Arrow** – Pause and step backward/forward one video frame
 - **Up/Down Arrow** – Adjust Mac system volume by 5 percentage points (0–100%)
 - **Option–Left/Right Arrow** – Display subtitles 0.1 seconds earlier/later

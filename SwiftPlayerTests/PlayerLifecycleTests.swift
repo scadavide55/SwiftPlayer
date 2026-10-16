@@ -464,7 +464,7 @@ final class PlayerLifecycleTests: XCTestCase {
         model.playbackRate = 1.5
         model.beginFastSeeking(direction: 1)
         try await waitUntil { model.isFastSeeking }
-        XCTAssertEqual(model.player.rate, 6)
+        XCTAssertEqual(model.player.rate, 1.5)
         model.endFastSeeking()
         XCTAssertEqual(model.player.rate, 1.5)
         model.beginFastSeeking(direction: 1)
