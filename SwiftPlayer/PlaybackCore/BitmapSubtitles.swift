@@ -59,9 +59,11 @@ nonisolated struct BitmapSubtitle: Sendable {
             pixels += part.width * part.height
             let indices = try part.dvdOffsets.map { try DVDSubtitleDecoder.pixels(part.bytes, width: part.width, height: part.height, offsets: $0) }
                 ?? Self.pgsPixels(part.bytes, width: part.width, height: part.height)
+            try Task.checkCancellation()
             var rgba = Data(count: indices.count * 4)
-            rgba.withUnsafeMutableBytes { (dest: UnsafeMutableRawBufferPointer) in
+            try rgba.withUnsafeMutableBytes { (dest: UnsafeMutableRawBufferPointer) in
                 for (i, index) in indices.enumerated() {
+                    if i.isMultiple(of: 4096) { try Task.checkCancellation() }
                     let c = Int(index) * 4
                     guard c + 3 < part.palette.count else { continue }
                     let alpha = UInt16(part.palette[c + 3])
@@ -69,6 +71,7 @@ nonisolated struct BitmapSubtitle: Sendable {
                     dest[i * 4 + 3] = UInt8(alpha)
                 }
             }
+            try Task.checkCancellation()
             guard let provider = CGDataProvider(data: rgba as CFData), let color = CGColorSpace(name: CGColorSpace.sRGB),
                   var image = CGImage(width: part.width, height: part.height, bitsPerComponent: 8, bitsPerPixel: 32,
                     bytesPerRow: part.width * 4, space: color, bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),

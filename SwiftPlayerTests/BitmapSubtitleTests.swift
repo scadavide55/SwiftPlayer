@@ -184,4 +184,32 @@ final class BitmapSubtitleTests: DebugMatrixTestCase {
         guard status == KERN_SUCCESS else { throw NSError(domain: NSMachErrorDomain, code: Int(status)) }
         return info.phys_footprint
     }
+
+    func testCancelBitmapRenderDuringRGBAConversionStopsTheWorker() async throws {
+        let width = 4096, height = 2048
+        // The index buffer costs 8 MiB; passing 16 MiB of growth identifies
+        // the subsequent RGBA conversion rather than the cancellable RLE pass.
+        let bytes = Data(Array(repeating: [UInt8(0), 0xd0, 0, 1, 0, 0], count: height).flatMap { $0 })
+        let bitmap = BitmapSubtitle(canvas: CGSize(width: width, height: height), parts: [
+            .init(bounds: CGRect(x: 0, y: 0, width: width, height: height), width: width, height: height,
+                  bytes: bytes, palette: [0, 0, 0, 0, 255, 255, 255, 255])])
+        let before = try Self.footprint()
+        let worker = Task.detached { try bitmap.render() }
+        defer { worker.cancel() }
+        do {
+            try await waitUntilCondition {
+                guard let bytes = try? Self.footprint(), bytes > before else { return false }
+                return bytes - before > 16 * 1024 * 1024
+            }
+        } catch {
+            worker.cancel()
+            _ = try? await worker.value
+            throw error
+        }
+        worker.cancel()
+        do {
+            _ = try await worker.value
+            XCTFail("A canceled RGBA conversion must stop rather than finishing the obsolete image.")
+        } catch is CancellationError { }
+    }
 }
