@@ -310,6 +310,12 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
         subtitleStatusMessage = "Some ASS/SSA effects are not supported. Supported text and styles will still appear."
     }
 
+    func subtitleTextForCapture(at time: Double) -> String {
+        guard subtitleSelection != "off", subtitleSelection != "external" else { return "" }
+        var snapshot = captionTimeline
+        return snapshot.text(at: time - subtitleDelay)
+    }
+
     func tick(time: Double, duration: Double) {
         renderEmbeddedText(at: time)
         if let resume = pendingResume, duration > 0 {

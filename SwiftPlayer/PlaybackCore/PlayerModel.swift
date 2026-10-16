@@ -627,6 +627,23 @@ final class PlayerModel: ObservableObject {
         } else { cancelSubtitleImage() }
     }
 
+    /// Frame export must sample the captured clock, independently of UI delivery.
+    func externalSubtitleSnapshot(at seconds: Double) -> (text: String, image: SubtitleRenderRequest?) {
+        guard seconds.isFinite, subtitlesEnabled, mediaControls.subtitleSelection == "external" else { return ("", nil) }
+        let time = seconds - subtitleOffset
+        var text: String?, styled: [ASSSubtitle] = []
+        for index in subtitleOrder {
+            let cue = subtitleCues[index]
+            if cue.start > time { break }
+            guard cue.end > time else { continue }
+            if text == nil { text = cue.text }
+            if let bitmap = cue.bitmap { return ("", .bitmap(bitmap)) }
+            if let style = cue.styled, preferences?.useSubtitleFileStyles != false, styled.count < 64 { styled.append(style) }
+            else if !hasStyledSubtitles || preferences?.useSubtitleFileStyles == false { break }
+        }
+        return (text ?? "", styled.isEmpty ? nil : .styled(styled, time))
+    }
+
     private func cancelSubtitleImage(clear: Bool = true) {
         subtitleImageIdentifier = UUID()
         subtitleImageTask?.cancel()

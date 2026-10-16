@@ -51,7 +51,7 @@ final class FrameCaptureController: ObservableObject {
         let item: AVPlayerItem
         let time: CMTime
         let caption: FrameCaption?
-        let subtitles: SubtitleImageFrame?
+        let subtitles: SubtitleRenderRequest?
     }
 
     private func request() -> Request? {
@@ -60,13 +60,14 @@ final class FrameCaptureController: ObservableObject {
         let clock = model.player.currentTime()
         guard clock.seconds.isFinite, clock.seconds >= 0 else { return nil }
         var caption: FrameCaption?
+        let external = model.externalSubtitleSnapshot(at: clock.seconds)
         if includeSubtitles {
             let media = model.mediaControls
             let text: String
             switch media.subtitleSelection {
             case "off": text = ""
-            case "external": text = model.currentSubtitleText
-            default: text = media.embeddedText
+            case "external": text = external.text
+            default: text = media.subtitleTextForCapture(at: clock.seconds)
             }
             let appearance = preferences.appearance.normalized
             let font = appearance.fontFamily == "System" ? NSFont.systemFont(ofSize: 24, weight: .semibold)
@@ -75,7 +76,7 @@ final class FrameCaptureController: ObservableObject {
                 outline: appearance.outline, backgroundOpacity: appearance.backgroundOpacity, position: appearance.position,
                 referenceHeight: viewing.subtitleReferenceHeight)
         }
-        let subtitles = includeSubtitles && model.mediaControls.subtitleSelection == "external" ? model.currentSubtitleImage : nil
+        let subtitles = includeSubtitles ? external.image : nil
         if subtitles != nil { caption = nil }
         return Request(item: item, time: clock, caption: caption, subtitles: subtitles)
     }
@@ -143,7 +144,8 @@ final class FrameCaptureController: ObservableObject {
                 try Task.checkCancellation()
                 let worker = Task.detached(priority: .userInitiated) {
                     try autoreleasepool {
-                        let data = try FrameCaptureImage.png(result.image, caption: caption, subtitles: subtitles)
+                        let renderedSubtitles = try subtitles?.render()
+                        let data = try FrameCaptureImage.png(result.image, caption: caption, subtitles: renderedSubtitles)
                         try Task.checkCancellation()
                         if let file {
                             let scoped = file.startAccessingSecurityScopedResource()

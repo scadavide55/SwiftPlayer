@@ -6,6 +6,47 @@ import ImageIO
 
 @MainActor
 final class FrameCaptureTests: DebugMatrixTestCase {
+    func testImageCaptionExportUsesCapturedClockInsteadOfAnOlderOverlayWhenProvided() async throws {
+        guard let path = ProcessInfo.processInfo.environment["SWIFTPLAYER_TEST_HD_MEDIA"] else { throw XCTSkip("Set optional local HD media for subtitle capture timing") }
+        let (model, preferences, viewing, capture, board, suite) = try await setup(path)
+        defer {
+            _ = preferences
+            capture.detach(); viewing.detach(); model.teardown(); board.releaseGlobally()
+            UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
+        }
+        let bitmap = BitmapSubtitle(canvas: CGSize(width: 1920, height: 1080), parts: [
+            .init(bounds: CGRect(x: 10, y: 10, width: 4, height: 4), width: 4, height: 4,
+                bytes: Data(Array(repeating: [UInt8](arrayLiteral: 0, 0x84, 1, 0, 0), count: 4).flatMap { $0 }),
+                palette: [0, 0, 0, 0, 255, 255, 255, 255])])
+        model.subtitleCues = [SubtitleCue(start: 1, end: 3, text: "", bitmap: bitmap)]
+        model.subtitlesEnabled = true
+        model.mediaControls.useExternalSubtitles(named: "Generated.sup")
+        model.currentTime = 2; model.updateSubtitleDisplay()
+        try await waitUntilCondition { model.currentSubtitleImage != nil }
+        XCTAssertEqual(model.player.currentTime().seconds, 0, accuracy: 0.001)
+        capture.copyFrame()
+        try await waitUntilCondition { !FrameCaptureCoordinator.shared.isBusy }
+        let plain = try XCTUnwrap(board.data(forType: .png))
+        model.currentTime = 2; model.updateSubtitleDisplay()
+        try await waitUntilCondition { model.currentSubtitleImage != nil }
+        capture.includeSubtitles = true
+        capture.copyFrame()
+        try await waitUntilCondition { !FrameCaptureCoordinator.shared.isBusy }
+        XCTAssertEqual(board.data(forType: .png), plain, "The caption is inactive at the actual captured frame time")
+        let positioned = await model.player.seek(to: CMTime(seconds: 2, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        XCTAssertTrue(positioned)
+        capture.includeSubtitles = false
+        capture.copyFrame()
+        try await waitUntilCondition { !FrameCaptureCoordinator.shared.isBusy }
+        let activePlain = try XCTUnwrap(board.data(forType: .png))
+        model.currentTime = 0; model.updateSubtitleDisplay()
+        XCTAssertNil(model.currentSubtitleImage)
+        capture.includeSubtitles = true
+        capture.copyFrame()
+        try await waitUntilCondition { !FrameCaptureCoordinator.shared.isBusy }
+        XCTAssertNotEqual(board.data(forType: .png), activePlain, "The active caption is rendered even before its UI overlay arrives")
+    }
+
     private func dimensions(_ data: Data) throws -> CGSize {
         let source = try XCTUnwrap(CGImageSourceCreateWithData(data as CFData, nil))
         let properties = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])

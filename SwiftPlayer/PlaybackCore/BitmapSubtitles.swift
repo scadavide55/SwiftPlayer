@@ -1,6 +1,17 @@
 import Foundation
 import CoreGraphics
 
+nonisolated enum SubtitleRenderRequest: Sendable {
+    case bitmap(BitmapSubtitle)
+    case styled([ASSSubtitle], Double)
+    func render() throws -> SubtitleImageFrame {
+        switch self {
+        case .bitmap(let bitmap): return try bitmap.render()
+        case .styled(let events, let time): return try ASSSubtitleRenderer.render(events, at: time)
+        }
+    }
+}
+
 nonisolated struct SubtitleImagePart: Sendable {
     let image: CGImage
     let bounds: CGRect
