@@ -411,6 +411,36 @@ final class PlayerModel: ObservableObject {
     func volumeDown() {
         volume = max((volume * 1_000_000 - 50_000).rounded() / 1_000_000, 0)
     }
+
+    func canStepFrame(direction: Int) -> Bool {
+        guard let item = player.currentItem, item.status == .readyToPlay,
+              item.presentationSize.width > 0, item.presentationSize.height > 0 else { return false }
+        switch direction {
+        case -1: return item.canStepBackward
+        case 1: return item.canStepForward
+        default: return false
+        }
+    }
+
+    /// Step the native video timeline, including variable-frame-rate media.
+    /// Ordinary seeks retain their default tolerance; no nominal-FPS estimate is used.
+    func stepFrame(direction: Int) {
+        guard canStepFrame(direction: direction), let item = player.currentItem else { return }
+        // Repeated steps while paused must not force a preferences write per frame.
+        if playbackRequested || player.rate != 0 { pause() }
+        else { endFastSeeking() }
+        isPlaying = false
+        seekIdentifier = UUID()
+        item.cancelPendingSeeks()
+        isSeeking = false
+        isScrubbing = false
+        playbackFinished = false
+        historyCompleted = false
+        item.step(byCount: direction)
+        // The existing native time observer updates position and captions when
+        // the asynchronous step reaches its destination.
+    }
+
     func seek(to seconds: Double) {
         guard seconds.isFinite, duration.isFinite, duration > 0,
               let item = player.currentItem, item.status == .readyToPlay else { return }
@@ -423,7 +453,7 @@ final class PlayerModel: ObservableObject {
         playbackFinished = false
         updateSubtitleDisplay()
         // Let AVFoundation choose a responsive seek position for ordinary playback.
-        // Sample-accurate seeks are reserved for explicit decoding tests.
+        // Frame stepping uses the separate native step command.
         player.seek(to: CMTime(seconds: target, preferredTimescale: 600)) { [weak self, weak item] finished in
             Task { @MainActor [weak self, weak item] in
                 guard let self, let item, self.player.currentItem === item,

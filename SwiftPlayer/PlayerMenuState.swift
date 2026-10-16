@@ -18,6 +18,8 @@ final class PlayerMenuState: ObservableObject {
     struct Snapshot: Equatable {
         var hasMedia = false
         var canNavigate = false
+        var canStepBackward = false
+        var canStepForward = false
         var playbackRequested = false
         var playbackRate: Float = 1
         var isMuted = false
@@ -63,6 +65,8 @@ final class PlayerMenuState: ObservableObject {
         let updated = Snapshot(
             hasMedia: hasMedia,
             canNavigate: hasMedia && model.duration.isFinite && model.duration > 0,
+            canStepBackward: model.canStepFrame(direction: -1),
+            canStepForward: model.canStepFrame(direction: 1),
             playbackRequested: model.playbackRequested,
             playbackRate: model.playbackRate,
             isMuted: model.isMuted,

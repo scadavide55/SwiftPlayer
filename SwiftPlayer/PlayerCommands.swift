@@ -153,6 +153,10 @@ struct PlaybackMenu: View {
         Button("Forward 10 Seconds") {
             if let model = state.model { model.seek(to: model.currentTime + 10) }
         }.disabled(!state.snapshot.canNavigate)
+        Button("Previous Frame") { state.model?.stepFrame(direction: -1) }
+            .keyboardShortcut(.leftArrow, modifiers: [.control]).disabled(!state.snapshot.canStepBackward)
+        Button("Next Frame") { state.model?.stepFrame(direction: 1) }
+            .keyboardShortcut(.rightArrow, modifiers: [.control]).disabled(!state.snapshot.canStepForward)
         Divider()
         Picker("After Playback", selection: $preferences.afterPlayback) {
             ForEach(EndOfPlaybackAction.allCases) { Text($0.title).tag($0) }
