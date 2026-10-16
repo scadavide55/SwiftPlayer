@@ -18,6 +18,11 @@ A minimal, fully native video and audio player for macOS built with SwiftUI and 
 - **Subtitle support** – Embedded text tracks plus SRT, VTT, and ASS/SSA files. Choose Off, Automatic, individual tracks, or an external file, and set a preferred language.
 - **Subtitle appearance** – Choose a font, size, text color, outline, background opacity, and position with a live preview.
 - **Audio languages** – Select an audio track or use a preferred language automatically.
+- **Audio level controls** – Protect boosted peaks with a linked limiter, and optionally normalize quiet and loud passages. Peak protection is on by default; normalization is off.
+- **After playback** – Stay at the end, rewind and pause, repeat the file, or close it, without a modal prompt.
+- **Subtitle workflow** – Find matching files in folders you authorize, prefer your subtitle language, and adjust embedded or external subtitle timing.
+- **Per-file choices** – Optionally remember audio/subtitle tracks, external subtitle references, and subtitle delay when reopening a file.
+- **Seek previews** – Hover or drag over the timeline for a small thumbnail without seeking the playing video until you release the scrubber.
 - **Navigation and preferences** – Jump to a time, navigate chapters, reopen recent files, and optionally remember volume, mute, and playback position.
 - **Media information** – Inspect codecs, resolution, frame rate, audio channels, and subtitle tracks from the Window menu.
 - **Minimal UI** – Clean interface that fades away when idle, keeps focus on your content
@@ -84,12 +89,14 @@ The opt-in 8K tests also repeat playback/seek/teardown cycles and record the tes
 process's physical memory footprint after cleanup; this is not a live playback
 memory limit. Ordinary scrubber and keyboard seeks use AVFoundation's default
 tolerance. Exact seeking is used only by the decoding regression tests.
-The eight debugging matrices execute 100 numbered scenario/input combinations
+The nine debugging matrices execute 100 numbered scenario/input combinations
 per area. For the complete compatibility matrix, also set
 `TEST_RUNNER_SWIFTPLAYER_TEST_HD_MEDIA` to a local 1920-pixel-wide `hev1` HEVC
 sample. Its audio and subtitle track types are checked for preservation during
 preparation. Test media remains local. See [the debugging review](DEBUG_REVIEW_800.md)
-for coverage, results, and limitations.
+for the original eight areas, and [the core review](CORE_REVIEW_100.md) for the
+additional core area. See [the playback improvements review](PLAYBACK_IMPROVEMENTS_REVIEW.md)
+for the latest feature checks, results, and limitations.
 Supported video resolutions and profiles still depend on the Mac's native decoder.
 Retagging is a compatibility workaround, not a general HEVC conversion: streams
 that depend on new parameter sets carried inside later frames may still fail.
@@ -102,8 +109,9 @@ the previous media's subtitle and Picture in Picture resources.
 ## Shared playback core
 
 `SwiftPlayer/PlaybackCore` contains the AVPlayer state model, subtitle parser,
-and HEVC preparation code. It imports Foundation, AVFoundation, Combine, and
-Darwin without a presentation framework. Time formatting remains outside the
+and HEVC preparation code, along with media preferences, audio processing, and
+thumbnail generation. It imports Foundation, AVFoundation, Combine, CoreGraphics,
+and Darwin without a presentation framework. Time formatting remains outside the
 core with the macOS presentation code. This is a shared source group in the
 existing app target, not a separate package or a completed mobile app.
 
@@ -124,18 +132,34 @@ run requires both local media environment variables described above. See
 - **Playback → Jump to Time…** (`⌘J`) accepts seconds, minutes:seconds, or hours:minutes:seconds. Chapter navigation appears when the file supplies chapter titles. Changing position preserves pause.
 - **Audio → Audio track** selects an embedded audio track. The preferred language applies while the selector is Automatic.
 - **Subtitles → Subtitle track** offers Off, Automatic, embedded choices, and a loaded external file. Automatic prefers a full subtitle option in the preferred language, falling back to the first full option before forced-only captions. Explicit track choices take precedence over language preferences.
-- **Subtitles → Appearance and Fonts…** styles decoded text captions in the main window. The caption popover also offers external-file loading and external subtitle delay.
+- **Subtitles → Appearance and Fonts…** styles decoded text captions in the main window. The caption popover also offers external-file loading and timing for embedded or external text. Positive delay displays captions later; negative delay displays them earlier, within a ±30-second range.
+- **Subtitles → Find Matching Subtitles…** searches only folders added under Settings → Subtitle Files. Matching uses the media basename and optional language/forced-caption tags, without scanning subfolders. Automatic finding respects Off and explicit track choices. Option–Left/Right adjusts subtitle timing by 0.1 seconds.
+- **Playback → After Playback** selects Stay at End, Rewind and Pause, Repeat File, or Close File. The same preference is available in General settings.
 - **Window → Media Information…** (`⌘I`) shows the current file's streams and duration.
 - **SwiftPlayer → Settings…** (`⌘,`) saves language and appearance preferences, sets the maximum volume from 100% to 400% (200% by default), controls whether volume/mute are remembered, and enables optional resume. Turning resume off clears saved positions. Positions near the start or end are not resumed.
 
 100% is the original audio level. Higher values amplify decoded audio through
 AVFoundation audio taps, without changing the system volume or creating a
-second audio playback clock. Peaks are limited to the representable range;
-boosting loud audio can cause clipping. The audio graph stays in place when
+second audio playback clock. Peak protection is enabled by default in General settings:
+a shared gain envelope preserves channel balance while keeping boosted peaks
+below full scale. Disabling it restores hard clipping at the representable range.
+Optional normalization adjusts level gradually, within a bounded gain range;
+a quiet-input gate avoids trying to normalize silence or low-level noise.
+These controls do not change pitch or introduce a second playback clock.
+The audio graph stays in place when
 volume changes, including when switching tracks. Lowering the configured
 maximum clamps open players' volume while preserving mute.
 
-Preferences, recent-file references, and resume positions stay in local app storage.
+Preferences, recent-file references, resume positions, and per-file track/timing
+choices stay in local app storage. Turning off Remember tracks and subtitle
+timing clears those saved per-file choices. Up to 100 files are remembered;
+external subtitles and search folders use read-only security-scoped bookmarks.
+Language preferences supply the fallback when a saved track is unavailable.
+
+Seek previews use a throttled native image generator with relaxed image-extraction
+tolerance. Their memory-only image cache is limited to 32 thumbnails and 8 MiB,
+and clears when the media closes or changes. This cache limit does not include
+AVFoundation's internal decoder buffers. Audio-only files retain a time preview.
 The main window uses decoded embedded text so appearance controls also work with
 tx3g captions. Picture in Picture uses native embedded captions and the system's
 appearance; external-file captions remain in the main window. Image-based or
@@ -166,6 +190,8 @@ Tested on: MacBook Air 2020 (Intel Core i3, dual-core) and MacBook Air M5 (2026)
 
 - **Space** – Play/pause
 - **Left/Right Arrow** – Jump back/forward 5 seconds (hold to fast-seek)
+- **Up/Down Arrow** – Adjust volume by 5 percentage points
+- **Option–Left/Right Arrow** – Display subtitles 0.1 seconds earlier/later
 - **Home button** – Return to file selection screen
 
 ## License
