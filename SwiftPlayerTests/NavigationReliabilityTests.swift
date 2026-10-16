@@ -5,11 +5,11 @@ import AVFoundation
 @MainActor
 final class NavigationReliabilityTests: DebugMatrixTestCase {
     private var output: AVPlayerItemVideoOutput?
-    private func localPlayer(playing: Bool) async throws -> PlayerModel {
+    private func localPlayer(playing: Bool, preferences: PlayerPreferences? = nil) async throws -> PlayerModel {
         guard let path = ProcessInfo.processInfo.environment["SWIFTPLAYER_TEST_NAVIGATION_MEDIA"] else {
             throw XCTSkip("Provide local long-GOP video to check repeated navigation.")
         }
-        let model = PlayerModel()
+        let model = PlayerModel(preferences: preferences)
         try await ready(model, url: URL(fileURLWithPath: path))
         let output = AVPlayerItemVideoOutput(pixelBufferAttributes: [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange])
@@ -131,6 +131,25 @@ final class NavigationReliabilityTests: DebugMatrixTestCase {
             XCTAssertEqual(model.player.rate, 0)
             XCTAssertFalse(model.playbackRequested)
         }
+    }
+
+    func testNativeReverseReachingStartDoesNotCompleteOrCloseTheFileWhenProvided() async throws {
+        let name = "ReverseBoundary-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let preferences = PlayerPreferences(defaults: defaults)
+        preferences.afterPlayback = .close
+        let model = try await localPlayer(playing: false, preferences: preferences)
+        defer { model.teardown() }
+        XCTAssertTrue(try XCTUnwrap(model.player.currentItem).canPlayFastReverse)
+        model.seek(to: 0.8, tolerance: 0.05)
+        try await waitUntilCondition { !model.isSeeking }
+        model.player.rate = -4
+        try await waitUntilCondition { model.player.rate == 0 && model.player.currentTime().seconds < 0.1 }
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertFalse(model.playbackFinished)
+        XCTAssertEqual(model.currentTime, 0, accuracy: 0.1)
+        XCTAssertNotNil(model.player.currentItem)
     }
 
     func testSettledJumpsUseNativeClockAndRapidJumpsUsePendingTargets() async throws {

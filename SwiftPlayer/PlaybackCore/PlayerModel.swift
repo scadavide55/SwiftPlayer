@@ -124,6 +124,7 @@ final class PlayerModel: ObservableObject {
     private var fastSeekTask: Task<Void, Never>?
     private var fastSeekDirection: Int?
     private var fastSeekRate: Float?
+    private var wasPlayingInReverse = false
     private var seekIdentifier = UUID()
     private(set) var isSeeking = false
     
@@ -214,6 +215,9 @@ final class PlayerModel: ObservableObject {
         guard player.currentItem === item, item.status == .readyToPlay else { return }
         // Background callbacks can arrive later; always read the latest rate.
         let rate = player.rate
+        // The native rate has already become zero by the time a reverse-end
+        // notification arrives; retain its last non-zero direction.
+        if rate != 0 { wasPlayingInReverse = rate < 0 }
         if isFastSeeking {
             // Ignore our own hold transport, but let native controls interrupt
             // it without restoring the old rate over the user's new command.
@@ -369,6 +373,20 @@ final class PlayerModel: ObservableObject {
             // it immediately so it cannot overtake a subsequent seek or replay.
             MainActor.assumeIsolated {
                 guard let self, self.player.currentItem === item else { return }
+                if self.wasPlayingInReverse, self.player.currentTime().seconds < 0.1 {
+                    // Reaching the beginning in reverse is not completion of
+                    // the file and must not run forward end-of-file actions.
+                    self.playbackRequested = false
+                    self.endFastSeeking()
+                    self.player.pause()
+                    self.isPlaying = false
+                    self.currentTime = 0
+                    self.playbackFinished = false
+                    self.historyCompleted = false
+                    self.updateSubtitleDisplay()
+                    self.saveHistory(force: true)
+                    return
+                }
                 self.playbackRequested = false
                 self.endFastSeeking()
                 self.player.pause()
@@ -701,6 +719,7 @@ final class PlayerModel: ObservableObject {
         historyCompleted = false
         requestedStartTime = nil
         mediaControls.detach()
+        wasPlayingInReverse = false
         playbackRequested = false
         endFastSeeking()
         loadIdentifier = UUID()
