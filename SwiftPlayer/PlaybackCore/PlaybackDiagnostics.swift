@@ -48,6 +48,7 @@ nonisolated struct PlaybackDiagnosticSnapshot: Equatable, Sendable {
     var position: Double?
     var duration: Double?
     var selectedRate: Float = 1
+    var playerRate: Float?
     var actualRate: Float?
     var buffer = PlaybackBufferSummary()
     var bufferEmpty: Bool?
@@ -99,7 +100,8 @@ nonisolated struct PlaybackDiagnosticSnapshot: Equatable, Sendable {
         result.position = item != nil && time.isFinite && time >= 0 ? time : nil
         result.duration = model.duration.isFinite && model.duration > 0 ? model.duration : nil
         result.selectedRate = model.playbackRate
-        result.actualRate = item != nil && player.rate.isFinite ? player.rate : nil
+        result.playerRate = item != nil && player.rate.isFinite ? player.rate : nil
+        result.actualRate = effectiveRate(item?.timebase)
         result.buffer = .make(nativeRanges.prefix(256).map(\.timeRangeValue), position: time, truncated: nativeRanges.count > 256)
         result.bufferEmpty = ready ? item?.isPlaybackBufferEmpty : nil
         result.bufferFull = ready ? item?.isPlaybackBufferFull : nil
@@ -111,6 +113,13 @@ nonisolated struct PlaybackDiagnosticSnapshot: Equatable, Sendable {
         }
         result.memoryBytes = physicalFootprint()
         return result
+    }
+
+    static func effectiveRate(_ timebase: CMTimebase?) -> Float? {
+        guard let timebase else { return nil }
+        let rate = CMTimebaseGetEffectiveRate(timebase)
+        guard rate.isFinite, abs(rate) <= Double(Float.greatestFiniteMagnitude) else { return nil }
+        return Float(rate)
     }
 
     private static func physicalFootprint() -> UInt64? {

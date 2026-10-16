@@ -63,13 +63,16 @@ final class PlaybackDiagnosticsTests: DebugMatrixTestCase {
         let item = model.player.currentItem
         let paused = PlaybackDiagnosticSnapshot.capture(model)
         XCTAssertEqual(paused.state, .paused)
+        XCTAssertEqual(paused.playerRate, 0)
         XCTAssertEqual(paused.actualRate, 0)
         XCTAssertGreaterThan(paused.memoryBytes ?? 0, 0)
+        let initialTime = model.player.currentTime().seconds
         model.play()
-        try await waitUntilCondition { model.isPlaying }
+        try await waitUntilCondition { model.isPlaying && model.player.currentTime().seconds > initialTime + 0.05 }
         let playing = PlaybackDiagnosticSnapshot.capture(model)
         XCTAssertEqual(playing.state, .playing)
-        XCTAssertEqual(playing.actualRate, 1)
+        XCTAssertEqual(playing.playerRate, 1)
+        XCTAssertEqual(try XCTUnwrap(playing.actualRate), 1, accuracy: 0.01)
         XCTAssertTrue(model.player.currentItem === item)
         XCTAssertTrue(model.playbackRequested)
         model.pause()
@@ -79,6 +82,24 @@ final class PlaybackDiagnosticsTests: DebugMatrixTestCase {
         model.load(url: directory.appendingPathComponent("Missing.mp4"))
         try await waitUntilCondition { model.playbackFailed }
         XCTAssertEqual(PlaybackDiagnosticSnapshot.capture(model).state, .failed)
+    }
+
+    func testEffectiveClockRateIncludesPausedAndSlowerSourceTimebases() throws {
+        var source: CMTimebase?
+        XCTAssertEqual(CMTimebaseCreateWithSourceClock(allocator: kCFAllocatorDefault,
+            sourceClock: CMClockGetHostTimeClock(), timebaseOut: &source), noErr)
+        let sourceClock = try XCTUnwrap(source)
+        var child: CMTimebase?
+        XCTAssertEqual(CMTimebaseCreateWithSourceTimebase(allocator: kCFAllocatorDefault,
+            sourceTimebase: sourceClock, timebaseOut: &child), noErr)
+        let mediaClock = try XCTUnwrap(child)
+        XCTAssertEqual(CMTimebaseSetRate(mediaClock, rate: 1), noErr)
+        XCTAssertEqual(CMTimebaseGetRate(mediaClock), 1)
+        XCTAssertEqual(PlaybackDiagnosticSnapshot.effectiveRate(mediaClock), 0,
+            "A requested media rate of one is ineffective while its source timebase is paused")
+        XCTAssertEqual(CMTimebaseSetRate(sourceClock, rate: 0.5), noErr)
+        XCTAssertEqual(PlaybackDiagnosticSnapshot.effectiveRate(mediaClock), 0.5)
+        XCTAssertNil(PlaybackDiagnosticSnapshot.effectiveRate(nil))
     }
 
     func testSamplerStopsWhenHiddenAndDoesNotRetainItsPlayerOrInvalidateMenus() async throws {

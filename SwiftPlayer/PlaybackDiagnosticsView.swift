@@ -23,7 +23,8 @@ struct PlaybackDiagnosticsView: View {
                     row("Position", time(snapshot.position))
                     row("Duration", time(snapshot.duration))
                     row("Selected speed", rate(snapshot.selectedRate))
-                    row("Actual speed", rate(snapshot.actualRate))
+                    row("Player rate", rate(snapshot.playerRate))
+                    row("Effective clock speed", rate(snapshot.actualRate))
                     row("Buffered ahead", seconds(snapshot.buffer.ahead))
                     row(snapshot.buffer.isTruncated ? "Loaded time (sample)" : "Reported loaded time", time(snapshot.buffer.total))
                     row("Buffer empty", flag(snapshot.bufferEmpty))
@@ -45,6 +46,8 @@ struct PlaybackDiagnosticsView: View {
                 Text("Updates once per second while this panel is visible. Buffer values are AVFoundation reports; local files may provide limited buffering information. App memory includes all windows and framework buffers.")
                     .font(.caption).foregroundStyle(.secondary)
                 Text("Frame rate in Streams is the file's nominal rate. Live renderer and dropped-frame counters are not collected.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Text("Player rate is the native requested rate. Effective clock speed comes from the media timebase and includes a paused or waiting source clock.")
                     .font(.caption).foregroundStyle(.secondary)
             }.padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
         }
