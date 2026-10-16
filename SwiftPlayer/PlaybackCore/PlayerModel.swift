@@ -511,12 +511,13 @@ final class PlayerModel: ObservableObject {
         return target
     }
 
-    func beginFastSeeking(direction: Int) {
+    func beginFastSeeking(direction: Int, largeJump: Bool = false) {
         guard [-1, 1].contains(direction), player.currentItem?.status == .readyToPlay,
               fastSeekDirection != direction else { return }
         endFastSeeking()
         fastSeekDirection = direction
-        skip(by: Double(direction) * 5)
+        let jump = Double(direction) * (largeJump ? 30 : 5)
+        skip(by: jump)
         fastSeekTask = Task { [weak self] in
             do {
                 try await Task.sleep(for: .milliseconds(500))
@@ -535,7 +536,7 @@ final class PlayerModel: ObservableObject {
                 while !Task.isCancelled {
                     guard let time = self?.currentTime, let duration = self?.duration,
                           direction < 0 ? time > 0 : time < duration else { return }
-                    guard let target = self?.skip(by: Double(direction) * 5),
+                    guard let target = self?.skip(by: jump),
                           direction < 0 ? target > 0 : target < duration else { return }
                     try await Task.sleep(for: .milliseconds(100))
                 }

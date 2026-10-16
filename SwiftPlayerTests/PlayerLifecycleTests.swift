@@ -699,7 +699,7 @@ final class PlayerLifecycleTests: XCTestCase {
         var directions: [Int] = []
         var releases = 0
         view.onSpace = { plays += 1 }
-        view.onArrowDown = { directions.append($0) }
+        view.onArrowDown = { direction, _ in directions.append(direction) }
         view.onArrowUp = { releases += 1 }
         func event(_ code: UInt16, repeated: Bool = false) throws -> NSEvent {
             try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero,

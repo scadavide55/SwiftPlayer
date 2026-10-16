@@ -25,7 +25,7 @@ final class InteractionDebugMatrixTests: DebugMatrixTestCase {
                     var directions: [Int] = []
                     var releases = 0
                     view.onSpace = { plays += 1 }
-                    view.onArrowDown = { directions.append($0) }
+                    view.onArrowDown = { direction, _ in directions.append(direction) }
                     view.onArrowUp = { releases += 1 }
                     switch family {
                     case 0:

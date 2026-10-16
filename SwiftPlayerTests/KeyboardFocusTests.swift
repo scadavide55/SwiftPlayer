@@ -4,6 +4,20 @@ import AppKit
 
 @MainActor
 final class KeyboardFocusTests: XCTestCase {
+    func testShiftRoutesSixTimesTheNormalJump() throws {
+        let view = KeyEventHandlingView.KeyCatcherView()
+        defer { KeyEventHandlingView.dismantleNSView(view, coordinator: ()) }
+        var jumps: [Int] = []
+        view.onArrowDown = { direction, largeJump in jumps.append(direction * (largeJump ? 30 : 5)) }
+        for (code, flags): (UInt16, NSEvent.ModifierFlags) in [(123, []), (124, []), (123, .shift), (124, .shift)] {
+            let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags,
+                timestamp: 0, windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "",
+                isARepeat: false, keyCode: code))
+            view.keyDown(with: event)
+        }
+        XCTAssertEqual(jumps, [-5, 5, -30, 30])
+    }
+
     private func event(_ code: UInt16, window: NSWindow, up: Bool = false) throws -> NSEvent {
         try XCTUnwrap(NSEvent.keyEvent(with: up ? .keyUp : .keyDown, location: .zero, modifierFlags: [],
             timestamp: 0, windowNumber: window.windowNumber, context: nil, characters: "",
@@ -20,7 +34,7 @@ final class KeyboardFocusTests: XCTestCase {
         let catcher = KeyEventHandlingView.KeyCatcherView()
         root.addSubview(catcher)
         var directions: [Int] = [], volumes: [Int] = []
-        catcher.onArrowDown = { directions.append($0) }
+        catcher.onArrowDown = { direction, _ in directions.append(direction) }
         catcher.onVolumeUp = { volumes.append(1) }
         catcher.onVolumeDown = { volumes.append(-1) }
         let slider = NSSlider(value: 0.5, minValue: 0, maxValue: 1, target: nil, action: nil)
@@ -46,7 +60,7 @@ final class KeyboardFocusTests: XCTestCase {
         let catcher = KeyEventHandlingView.KeyCatcherView()
         root.addSubview(catcher)
         var starts = 0, ends = 0
-        catcher.onArrowDown = { _ in starts += 1 }
+        catcher.onArrowDown = { _, _ in starts += 1 }
         catcher.onArrowUp = { ends += 1 }
         let slider = NSSlider()
         root.addSubview(slider)

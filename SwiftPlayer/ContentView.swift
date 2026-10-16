@@ -184,7 +184,7 @@ private struct PlayerContentView: View {
                 .background(MouseActivityTracker(onActivity: registerActivity))
                 .background(KeyEventHandlingView(
                     onSpace: { registerActivity(); model.togglePlayPause() },
-                    onArrowDown: { direction in handleArrowDown(direction: direction) },
+                    onArrowDown: { direction, largeJump in handleArrowDown(direction: direction, largeJump: largeJump) },
                     onArrowUp: { handleArrowUp() },
                     onVolumeUp: { registerActivity(); systemVolume.increase() },
                     onVolumeDown: { registerActivity(); systemVolume.decrease() },
@@ -340,9 +340,9 @@ private struct PlayerContentView: View {
         windowControls.toggleFullScreen()
     }
 
-    private func handleArrowDown(direction: Int) {
+    private func handleArrowDown(direction: Int, largeJump: Bool) {
         registerActivity()
-        model.beginFastSeeking(direction: direction)
+        model.beginFastSeeking(direction: direction, largeJump: largeJump)
     }
 
     private func handleArrowUp() {
@@ -504,7 +504,7 @@ struct MouseActivityTracker: NSViewRepresentable {
 }
 struct KeyEventHandlingView: NSViewRepresentable {
     let onSpace: () -> Void
-    let onArrowDown: (Int) -> Void // -1 left, +1 right
+    let onArrowDown: (Int, Bool) -> Void // direction (-1/+1), Shift for a larger jump
     let onArrowUp: () -> Void
     let onVolumeUp: () -> Void
     let onVolumeDown: () -> Void
@@ -543,7 +543,7 @@ struct KeyEventHandlingView: NSViewRepresentable {
 
     final class KeyCatcherView: NSView {
         var onSpace: (() -> Void)?
-        var onArrowDown: ((Int) -> Void)?
+        var onArrowDown: ((Int, Bool) -> Void)?
         var onArrowUp: (() -> Void)?
         var onVolumeUp: (() -> Void)?
         var onVolumeDown: (() -> Void)?
@@ -605,10 +605,10 @@ struct KeyEventHandlingView: NSViewRepresentable {
                 if !event.isARepeat { onSpace?() }
             case 123: // left arrow
                 hasActiveArrow = true
-                onArrowDown?(-1)
+                onArrowDown?(-1, modifiers.contains(.shift))
             case 124: // right arrow
                 hasActiveArrow = true
-                onArrowDown?(1)
+                onArrowDown?(1, modifiers.contains(.shift))
             case 126: // up arrow
                 onVolumeUp?()
             case 125: // down arrow
