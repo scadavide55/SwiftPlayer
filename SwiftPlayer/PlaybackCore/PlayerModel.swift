@@ -550,10 +550,12 @@ final class PlayerModel: ObservableObject {
         endFastSeeking()
         fastSeekDirection = direction
         let jump = Double(direction) * (mode == .largeJump ? 30 : 5)
+        let clock = ContinuousClock()
+        let holdDeadline = clock.now.advanced(by: .milliseconds(500))
         skip(by: jump)
         fastSeekTask = Task { [weak self] in
             do {
-                try await Task.sleep(for: .milliseconds(500))
+                try await Task.sleep(until: holdDeadline, clock: clock)
                 try Task.checkCancellation()
                 self?.isFastSeeking = true
                 if mode == .shuttle, let item = self?.player.currentItem,
@@ -573,12 +575,16 @@ final class PlayerModel: ObservableObject {
                     self?.fastSeekRate = 0
                     self?.player.pause()
                 }
+                var nextTick = holdDeadline
                 while !Task.isCancelled {
                     guard let time = self?.currentTime, let duration = self?.duration,
                           direction < 0 ? time > 0 : time < duration else { return }
                     guard let target = self?.skip(by: jump),
                           direction < 0 ? target > 0 : target < duration else { return }
-                    try await Task.sleep(for: .milliseconds(100))
+                    // Anchor ticks to the press, so time spent handling a
+                    // seek does not get added to every 100 ms interval.
+                    nextTick = nextTick.advanced(by: .milliseconds(100))
+                    try await Task.sleep(until: nextTick, clock: clock)
                 }
             } catch { /* Releasing a key or closing playback cancels the hold. */ }
         }

@@ -16,6 +16,34 @@ final class HeldNavigationTests: DebugMatrixTestCase {
         return url
     }
 
+    func testSeekHandlingCostDoesNotAccumulateIntoTheRepeatInterval() async throws {
+        let model = PlayerModel()
+        defer { model.teardown() }
+        try await ready(model, url: longAudio())
+        model.seek(to: 300)
+        try await waitUntilCondition { !model.isSeeking }
+        var previous = model.currentTime
+        let clock = ContinuousClock()
+        let began = clock.now
+        let cutoff = began.advanced(by: .milliseconds(1090))
+        var jumps: [ContinuousClock.Instant] = []
+        let token = model.$currentTime.sink { time in
+            if time - previous > 4 {
+                jumps.append(clock.now)
+                // Simulate synchronous seek/UI work on the actor. A timer
+                // that sleeps after that work accumulates this cost per tick.
+                Thread.sleep(forTimeInterval: 0.025)
+            }
+            previous = time
+        }
+        defer { token.cancel() }
+        model.beginFastSeeking(direction: 1)
+        try await Task.sleep(until: cutoff, clock: clock)
+        model.endFastSeeking()
+        XCTAssertEqual(jumps.filter { $0 < cutoff }.count, 7,
+            "One immediate jump, then six ticks from 0.5 through 1.0 seconds; exclude ticks after the measurement window if the test task wakes late")
+    }
+
     func testHoldHasHalfSecondDelayThenRepeatsNormalAndShiftJumpsEveryTenthSecond() async throws {
         let url = try longAudio()
         for largeJump in [false, true] {
@@ -51,8 +79,12 @@ final class HeldNavigationTests: DebugMatrixTestCase {
                         XCTAssertGreaterThanOrEqual(jumps[1], .milliseconds(480))
                         XCTAssertLessThan(jumps[1], .milliseconds(650))
                         for index in 2..<jumps.count {
-                            XCTAssertGreaterThanOrEqual(jumps[index] - jumps[index - 1], .milliseconds(80))
-                            XCTAssertLessThan(jumps[index] - jumps[index - 1], .milliseconds(180))
+                            let deadline = Duration.milliseconds(500 + (index - 1) * 100)
+                            // A delayed actor can catch up at the following
+                            // deadline; measure drift from the press rather
+                            // than requiring a fresh delay after every tick.
+                            XCTAssertGreaterThanOrEqual(jumps[index], deadline)
+                            XCTAssertLessThan(jumps[index], deadline + .milliseconds(150))
                         }
                     }
                     XCTAssertEqual(model.playbackRequested, playing)
