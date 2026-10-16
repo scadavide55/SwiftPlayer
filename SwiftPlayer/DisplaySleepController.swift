@@ -12,14 +12,14 @@ private final class DisplaySleepActivity {
 @MainActor
 final class DisplaySleepController: ObservableObject {
     private var activity: AnyObject?
-    private let makeActivity: () -> AnyObject
+    private let makeActivity: @MainActor () -> AnyObject
     private var observations: [AnyCancellable] = []
     private var refreshTask: Task<Void, Never>?
     private weak var model: PlayerModel?
     private weak var preferences: PlayerPreferences?
     var isPreventingSleep: Bool { activity != nil }
 
-    init(makeActivity: @escaping () -> AnyObject = { DisplaySleepActivity() }) {
+    init(makeActivity: @escaping @MainActor () -> AnyObject = { DisplaySleepActivity() }) {
         self.makeActivity = makeActivity
     }
 
