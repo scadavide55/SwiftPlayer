@@ -24,12 +24,14 @@ nonisolated struct VobSubIndex: Sendable {
             try Task.checkCancellation()
             let line = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             if line.hasPrefix("size:") {
-                let parts = line.dropFirst(5).split(separator: "x").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
-                guard parts.count == 2, parts.allSatisfy({ $0 > 0 && $0 <= 4096 }) else { throw SubtitleDecodingError.invalid }
+                let fields = line.dropFirst(5).split(separator: "x", omittingEmptySubsequences: false)
+                let parts = fields.compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+                guard fields.count == 2, parts.count == 2, parts.allSatisfy({ $0 > 0 && $0 <= 4096 }) else { throw SubtitleDecodingError.invalid }
                 result.canvas = CGSize(width: parts[0], height: parts[1])
             } else if line.hasPrefix("palette:") {
-                result.palette = line.dropFirst(8).split(separator: ",").compactMap { UInt32($0.trimmingCharacters(in: .whitespaces), radix: 16) }
-                guard result.palette.count == 16, result.palette.allSatisfy({ $0 <= 0xffffff }) else { throw SubtitleDecodingError.invalid }
+                let fields = line.dropFirst(8).split(separator: ",", omittingEmptySubsequences: false)
+                result.palette = fields.compactMap { UInt32($0.trimmingCharacters(in: .whitespaces), radix: 16) }
+                guard fields.count == 16, result.palette.count == 16, result.palette.allSatisfy({ $0 <= 0xffffff }) else { throw SubtitleDecodingError.invalid }
             } else if line.hasPrefix("langidx:") {
                 result.defaultTrack = Int(line.dropFirst(8).trimmingCharacters(in: .whitespaces)) ?? 0
             } else if line.hasPrefix("id:") {
@@ -59,8 +61,9 @@ nonisolated struct VobSubIndex: Sendable {
     }
 
     private static func timestamp(_ text: String) throws -> Double {
-        let values = text.split(separator: ":").compactMap { Int($0) }
-        guard values.count == 4, (0...999).contains(values[0]), (0..<60).contains(values[1]),
+        let fields = text.split(separator: ":", omittingEmptySubsequences: false)
+        let values = fields.compactMap { Int($0) }
+        guard fields.count == 4, values.count == 4, (0...999).contains(values[0]), (0..<60).contains(values[1]),
               (0..<60).contains(values[2]), (0..<1000).contains(values[3]) else { throw SubtitleDecodingError.invalid }
         return Double(values[0] * 3600 + values[1] * 60 + values[2]) + Double(values[3]) / 1000
     }
