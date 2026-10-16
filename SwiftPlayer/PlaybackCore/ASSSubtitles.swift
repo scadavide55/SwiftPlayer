@@ -153,7 +153,11 @@ nonisolated enum ASSSubtitleParser {
                     func numeric(_ prefix: String, _ range: ClosedRange<Double>, _ fallback: Double) -> Double { number(String(tag.dropFirst(prefix.count)), fallback: fallback, range: range) }
                     func arguments(_ prefix: String) -> [Double]? {
                         guard tag.hasPrefix(prefix + "("), tag.hasSuffix(")") else { return nil }
-                        let values = tag.dropFirst(prefix.count + 1).dropLast().split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+                        let fields = tag.dropFirst(prefix.count + 1).dropLast().split(separator: ",", omittingEmptySubsequences: false)
+                        let values = fields.compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+                        // Invalid or empty fields must not shift the remaining
+                        // arguments into a different supported effect.
+                        guard values.count == fields.count else { return nil }
                         return values.allSatisfy({ $0.isFinite && abs($0) <= 1_000_000 }) ? values : nil
                     }
                     if let values = arguments("pos"), values.count == 2 { event.position = CGPoint(x: values[0], y: values[1]) }

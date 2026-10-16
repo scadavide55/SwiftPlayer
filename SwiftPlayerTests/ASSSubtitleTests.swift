@@ -61,6 +61,26 @@ final class ASSSubtitleTests: DebugMatrixTestCase {
         XCTAssertEqual(ASSSubtitleParser.parse(script(event("{unclosed"))).first?.text, "{unclosed")
     }
 
+    func testMalformedOverrideArgumentsCannotBecomeDifferentValidEffects() throws {
+        for tag in ["pos(10,bad,20)", "pos(10,,20)", "pos(10,20,)",
+                    "move(10,20,bad,30,40)", "move(10,20,30,40,,500,1000)",
+                    "fad(100,bad,200)", "fad(100,,200)"] {
+            let cue = try XCTUnwrap(ASSSubtitleParser.parse(script(event("{\\\(tag)}Caption"))).first)
+            let styled = try XCTUnwrap(cue.styled)
+            XCTAssertNil(styled.position, tag)
+            XCTAssertNil(styled.motion, tag)
+            XCTAssertEqual(styled.fadeIn, 0, tag)
+            XCTAssertEqual(styled.fadeOut, 0, tag)
+            XCTAssertTrue(styled.hasUnsupportedEffects, tag)
+            XCTAssertEqual(cue.text, "Caption")
+        }
+        let valid = try XCTUnwrap(ASSSubtitleParser.parse(script(event("{\\pos(10, 20)\\fad(100, 200)}Caption"))).first?.styled)
+        XCTAssertEqual(valid.position, CGPoint(x: 10, y: 20))
+        XCTAssertEqual(valid.fadeIn, 0.1)
+        XCTAssertEqual(valid.fadeOut, 0.2)
+        XCTAssertFalse(valid.hasUnsupportedEffects)
+    }
+
     func testNativeRenderingHonorsColorsPositionMotionFadeAndLayerOrder() throws {
         let staticEvents = ASSSubtitleParser.parse(script(event("{\\an7\\pos(20,30)}Generated caption"))).compactMap(\.styled)
         let image = try ASSSubtitleRenderer.render(staticEvents, at: 2)
