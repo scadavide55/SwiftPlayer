@@ -17,6 +17,7 @@ A minimal, fully native video and audio player for macOS built with SwiftUI and 
 - **Pitch-preserving speed changes** – Playback uses AVFoundation's spectral time-pitch algorithm to keep voices and music at their original pitch as speed changes.
 - **Subtitle support** – Embedded text tracks plus SRT, VTT, ASS/SSA, external PGS (`.sup`), and VobSub (`.idx` + `.sub`) files. Image subtitles retain their colors and positions, including in optional subtitle frame captures. VobSub import offers its available languages and remembers the paired read-only file references. Choose Off, Automatic, individual tracks, or an external file, and set a preferred language.
 - **Subtitle appearance** – Choose a font, size, text color, outline, background opacity, and position with a live preview.
+- **ASS/SSA file styling** – Honor declared fonts, inline bold/italic/underline and colors, outlines, shadows, alignment, margins, positions, layers, movement and simple fades. Disable file styling in Appearance to use your own font and appearance instead.
 - **Audio languages** – Select an audio track or use a preferred language automatically.
 - **Audio level controls** – Protect boosted peaks with a linked limiter, and optionally normalize quiet and loud passages. Peak protection is on by default; normalization is off.
 - **After playback** – Stay at the end, rewind and pause, repeat the file, or close it, without a modal prompt.
@@ -128,6 +129,15 @@ when its companion exists. Index files are limited to 2 MiB, image files to
 512 MiB, and each caption read to 128 KiB; compressed retention and active image
 limits match PGS. DVD 2-bit subpictures are supported. HD-DVD extensions,
 custom-palette overrides, and unsupported control commands are rejected.
+ASS/SSA rendering uses CoreText with the script's logical canvas. It retains
+only the current rendered frame, up to 1920 × 1080 pixels, and samples movement
+and simple fades at most ten times per media second. Pausing freezes animation.
+Up to 64 active events and 32,768 rendered UTF-16 units are processed per frame.
+Advanced karaoke, animated transforms, vector drawings, clipping effects, and
+embedded font attachments are not implemented; unsupported effect tags produce
+a status message and drawing commands are not displayed as dialogue. Text
+fallback remains available by disabling file styling. External subtitle formats
+do not add MKV/container support or extraction of embedded unsupported tracks.
 
 ## Shared playback core
 

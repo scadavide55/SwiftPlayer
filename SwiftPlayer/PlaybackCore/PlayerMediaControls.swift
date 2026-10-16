@@ -306,6 +306,10 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
         subtitleStatusMessage = "The subtitle file could not be loaded. Choose a readable subtitle file."
     }
 
+    func noteUnsupportedSubtitleEffects() {
+        subtitleStatusMessage = "Some ASS/SSA effects are not supported. Supported text and styles will still appear."
+    }
+
     func tick(time: Double, duration: Double) {
         renderEmbeddedText(at: time)
         if let resume = pendingResume, duration > 0 {

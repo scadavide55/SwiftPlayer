@@ -41,6 +41,9 @@ struct SubtitleAppearanceView: View {
     @ObservedObject var preferences: PlayerPreferences
     var body: some View {
         Form {
+            Toggle("Use styles and positions from ASS/SSA files", isOn: $preferences.useSubtitleFileStyles)
+            Text("Turn this off to use the font and appearance below for ASS/SSA text. Image subtitles retain their original appearance.")
+                .font(.caption).foregroundStyle(.secondary)
             Picker("Font", selection: $preferences.appearance.fontFamily) {
                 Text("System").tag("System")
                 ForEach(Array(Set(NSFontManager.shared.availableFontFamilies + [preferences.appearance.fontFamily])).filter { $0 != "System" }.sorted(), id: \.self) { Text($0).tag($0) }

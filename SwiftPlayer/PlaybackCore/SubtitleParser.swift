@@ -5,6 +5,7 @@ struct SubtitleCue: Sendable {
     var end: Double
     let text: String
     var bitmap: BitmapSubtitle? = nil
+    var styled: ASSSubtitle? = nil
 }
 
 nonisolated let supportedSubtitleExtensions: [String] = ["srt", "vtt", "ass", "ssa", "sup", "idx", "sub"]
@@ -37,7 +38,7 @@ nonisolated func parseSubtitles(from url: URL, encoding: SubtitleEncoding = .aut
     case "vtt":
         return parseVTT(content)
     case "ass", "ssa":
-        return parseASS(content)
+        return ASSSubtitleParser.parse(content)
     default:
         return []
     }
@@ -117,35 +118,6 @@ nonisolated private func parseVTT(_ content: String) -> [SubtitleCue] {
     return cues
 }
 
-nonisolated private func parseASS(_ content: String) -> [SubtitleCue] {
-    var cues: [SubtitleCue] = []
-    let lines = content.components(separatedBy: .newlines)
-    let timePattern = #"^Dialogue:\s*(?:Marked=)?\d+,(\d+):(\d{2}):(\d{2})[.,](\d{2,3}),(\d+):(\d{2}):(\d{2})[.,](\d{2,3}),"#
-    guard let regex = try? NSRegularExpression(pattern: timePattern) else { return [] }
-
-    for line in lines where line.hasPrefix("Dialogue:") {
-        if Task.isCancelled { return [] }
-        let range = NSRange(line.startIndex..., in: line)
-        guard let match = regex.firstMatch(in: line, range: range) else { continue }
-        func value(_ idx: Int) -> Int? {
-            guard let r = Range(match.range(at: idx), in: line) else { return nil }
-            return Int(line[r])
-        }
-        guard let sh = value(1), let sm = value(2), let ss = value(3), let scs = value(4),
-              let eh = value(5), let em = value(6), let es = value(7), let ecs = value(8) else { continue }
-
-        let start = timeToSeconds(sh, sm, ss, scs * (match.range(at: 4).length == 2 ? 10 : 1))
-        let end = timeToSeconds(eh, em, es, ecs * (match.range(at: 8).length == 2 ? 10 : 1))
-
-        // Text is everything after the 9th comma-separated field.
-        let fields = line.components(separatedBy: ",")
-        guard fields.count > 9 else { continue }
-        let text = fields[9...].joined(separator: ",")
-        cues.append(SubtitleCue(start: start, end: end, text: stripASSTags(text)))
-    }
-    return cues
-}
-
 nonisolated private func stripTags(_ text: String) -> String {
     let plain = text.replacingOccurrences(of: #"<[^>]+>"#, with: "", options: .regularExpression)
     guard plain.contains("&") else { return plain }
@@ -166,9 +138,4 @@ nonisolated private func stripTags(_ text: String) -> String {
     }
     // Decode once, after stripping markup, so escaped literal tags stay visible.
     return result
-}
-
-nonisolated private func stripASSTags(_ text: String) -> String {
-    let noOverrides = text.replacingOccurrences(of: #"\{[^}]*\}"#, with: "", options: .regularExpression)
-    return noOverrides.replacingOccurrences(of: #"\\N|\\n"#, with: "\n", options: .regularExpression)
 }
