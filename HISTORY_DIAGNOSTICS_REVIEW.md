@@ -9,6 +9,7 @@ browser and playback information additions using the existing native engine.
 | --- | --- | --- |
 | `c212f5a` | Bounded local playback history, explicit continuation, and finished-state memory | Twenty history/preferences/menu/end-action tests passed without skips, including native chapter/audio language restoration |
 | `d35f38b` | On-demand native playback diagnostics and bounded buffer summaries | Ten diagnostics/menu tests passed without skips, including real HD/8K presentation sizes, native transport, memory readings, sampling cancellation/restart, and ownership |
+| `ad06424` | Effective media-clock speed separate from requested player rate | Eleven diagnostics/menu tests passed; independent source/child timebases prove a requested 1× rate can have an effective 0× rate, and native clock-progress checks verify the running rate |
 
 The history checks cover ten-second throttling, 200-entry/retention bounds,
 discarding invalid storage, read-only bookmarks, unavailable files, removed and
@@ -27,6 +28,14 @@ unavailable and malformed data, the 256-range processing bound, startup/waiting
 reason classification, real playing/paused/failed/closed state, native
 presentation sizes, sampling only while active, rapid restarts, no menu
 invalidation, and no retained closed player or sampler.
+
+Final review confirmed that AVPlayer's rate is the desired transport rate and
+can remain nonzero while waiting. The panel now labels it Player Rate and reads
+Effective Clock Speed from the item's read-only timebase using
+`CMTimebaseGetEffectiveRate`, including source-clock rates. A native startup
+check also observed a playing/requested state before the media clock began
+advancing; the test waits for actual clock progress before asserting running
+speed. Production code does not change or create playback timebases.
 
 ## Behavior and resource limits
 
@@ -64,18 +73,28 @@ invalidation, and no retained closed player or sampler.
 
 ## Final validation
 
-The final full regression passed all 161 tests with zero failures and zero
+The final full regression passed all 162 tests with zero failures and zero
 skipped tests, including the local HD/8K and generated chapter/audio fixtures.
 All 900 unique numbered scenarios passed: 100 each for compatibility, core,
 interaction, loading, memory, PiP, playback, seeking, and subtitles. The suite
-completed in approximately 236 seconds.
+completed in approximately 234 seconds without a test-host restart.
 
 The memory matrix's 100 post-cleanup process-footprint samples ranged from
-280 to 289 MiB. These are not decoder/export peak measurements or a controlled
+281 to 290 MiB. These are not decoder/export peak measurements or a controlled
 comparison against earlier runs.
 
-Final Release build and static analysis passed without warnings. All four
-shared-core platform checks passed without warnings.
+Final Release build and static analysis passed with zero application-source
+warnings. Xcode emitted its missing-AppIntents metadata notice; this app does
+not use AppIntents. All four shared-core platform checks passed without warnings.
+
+After the effective-clock correction, one complete-run attempt lost its test
+host during an existing native HEVC playback/seek test. The crash stack was in
+CoreMedia's file-read callback queue; an application cause was not established.
+The remaining restarted tests and all 900 scenarios passed, but that run was
+correctly treated as failed. Ten consecutive isolated reruns of the affected
+test passed. No speculative workaround, exclusion, or tolerance change was
+added. The fresh complete regression reported above passed all 162 tests after
+that isolation check. The earlier intermittent native crash remains unexplained.
 
 Programmatic native playback and ownership checks are covered. Computer-use
 tools are unavailable in this continuation, so manual history-sheet/menu,
