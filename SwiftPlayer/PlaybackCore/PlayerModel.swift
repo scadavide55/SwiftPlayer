@@ -501,7 +501,11 @@ final class PlayerModel: ObservableObject {
     func skip(by seconds: Double) -> Double? {
         guard seconds.isFinite, seconds != 0, duration.isFinite, duration > 0,
               player.currentItem?.status == .readyToPlay else { return nil }
-        let target = min(max(currentTime + seconds, 0), duration)
+        // Accumulate rapid input against the requested target, but use the
+        // native clock once settled; the UI timestamp is delivered less often.
+        let clock = player.currentTime().seconds
+        let base = isSeeking || isScrubbing || !clock.isFinite ? currentTime : clock
+        let target = min(max(base + seconds, 0), duration)
         seek(to: target, tolerance: min(0.25, abs(seconds) / 4))
         return target
     }

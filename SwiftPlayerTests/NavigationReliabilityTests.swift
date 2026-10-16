@@ -93,4 +93,26 @@ final class NavigationReliabilityTests: DebugMatrixTestCase {
             XCTAssertFalse(model.playbackRequested)
         }
     }
+
+    func testSettledJumpsUseNativeClockAndRapidJumpsUsePendingTargets() async throws {
+        let model = PlayerModel()
+        defer { model.teardown() }
+        try await ready(model)
+        let positioned = await model.player.seek(to: CMTime(seconds: 8, preferredTimescale: 600),
+            toleranceBefore: .zero, toleranceAfter: .zero)
+        XCTAssertTrue(positioned)
+        // A native seek can precede delivery of the periodic UI timestamp.
+        model.currentTime = 0
+        model.beginFastSeeking(direction: 1)
+        model.endFastSeeking()
+        try await waitUntilCondition { !model.isSeeking }
+        XCTAssertEqual(model.player.currentTime().seconds, 13, accuracy: 0.1)
+        for _ in 0..<3 {
+            model.beginFastSeeking(direction: -1)
+            model.endFastSeeking()
+        }
+        try await waitUntilCondition { !model.isSeeking }
+        XCTAssertEqual(model.player.currentTime().seconds, 0, accuracy: 0.1)
+        XCTAssertEqual(model.player.rate, 0)
+    }
 }
