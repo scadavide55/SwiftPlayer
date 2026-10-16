@@ -19,6 +19,7 @@ private struct PlayerContentView: View {
     @ObservedObject private var preferences = PlayerPreferences.shared
     @StateObject private var pipController = PiPController()
     @StateObject private var subtitleSearch = SubtitleSearchController()
+    @StateObject private var displaySleep = DisplaySleepController()
     @ObservedObject private var subtitleFolders = SubtitleFolderStore.shared
     @State private var showSubtitleMatches = false
     @State private var hasLoadedFile: Bool = false
@@ -75,6 +76,7 @@ private struct PlayerContentView: View {
         .onChange(of: preferences.autoFindSubtitles) { _ in startSubtitleSearch(automatic: true) }
         .onChange(of: preferences.subtitleLanguage) { _ in startSubtitleSearch(automatic: true) }
         .onChange(of: model.closedAtEnd) { closed in if closed { goHome() } }
+        .onAppear { displaySleep.attach(model: model, preferences: preferences) }
         .onChange(of: pipController.isActive) { active in model.mediaControls.nativeSubtitleRendering = active }
         .frame(minWidth: 480, minHeight: 320)
         .background(PlayerWindowObserver(onFullScreenChanged: { isFullScreen = $0 },
@@ -90,6 +92,7 @@ private struct PlayerContentView: View {
             Text("This will stop the current playback and load “\(url.lastPathComponent)”.")
         }
         .onDisappear {
+            displaySleep.detach()
             subtitleSearch.cancel()
             stopInteractions()
             pipController.detach()

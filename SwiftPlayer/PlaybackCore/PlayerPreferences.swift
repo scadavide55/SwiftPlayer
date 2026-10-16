@@ -35,6 +35,7 @@ final class PlayerPreferences: ObservableObject {
     }
     @Published var limitAudioPeaks: Bool { didSet { defaults.set(limitAudioPeaks, forKey: "limitAudioPeaks") } }
     @Published var normalizeAudio: Bool { didSet { defaults.set(normalizeAudio, forKey: "normalizeAudio") } }
+    @Published var keepDisplayAwake: Bool { didSet { defaults.set(keepDisplayAwake, forKey: "keepDisplayAwake") } }
     @Published var rememberVolume: Bool { didSet { defaults.set(rememberVolume, forKey: "rememberVolume") } }
     @Published var autoFindSubtitles: Bool { didSet { defaults.set(autoFindSubtitles, forKey: "autoFindSubtitles") } }
     @Published var rememberFileSettings: Bool {
@@ -74,6 +75,7 @@ final class PlayerPreferences: ObservableObject {
         maximumVolume = savedMaximum.isFinite ? min(max(savedMaximum, 1), 4) : 2
         limitAudioPeaks = defaults.object(forKey: "limitAudioPeaks") as? Bool ?? true
         normalizeAudio = defaults.object(forKey: "normalizeAudio") as? Bool ?? false
+        keepDisplayAwake = defaults.object(forKey: "keepDisplayAwake") as? Bool ?? true
         rememberVolume = defaults.object(forKey: "rememberVolume") as? Bool ?? true
         autoFindSubtitles = defaults.object(forKey: "autoFindSubtitles") as? Bool ?? true
         rememberFileSettings = defaults.object(forKey: "rememberFileSettings") as? Bool ?? true
