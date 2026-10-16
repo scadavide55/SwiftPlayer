@@ -23,6 +23,10 @@ A minimal, fully native video and audio player for macOS built with SwiftUI and 
 - **Subtitle workflow** – Find matching files in folders you authorize, prefer your subtitle language, and adjust embedded or external subtitle timing.
 - **Per-file choices** – Optionally remember audio/subtitle tracks, external subtitle references, and subtitle delay when reopening a file.
 - **Seek previews** – Hover or drag over the timeline for a small thumbnail without seeking the playing video until you release the scrubber.
+- **Native viewing controls** – Always on Top, Fit/Fill, aspect-ratio choices, Retina-aware window-size presets, and double-click fullscreen.
+- **Frame capture** – Save or copy a PNG of the current video frame, optionally including styled text subtitles.
+- **Legacy subtitle encodings** – Preview Big5, GB18030, or Shift-JIS subtitles before loading, and remember the successful encoding per media file.
+- **Display sleep prevention** – Optionally keep the display awake only while video plays. Pausing, closing, or replacing it with audio-only playback releases the request.
 - **Navigation and preferences** – Jump to a time, navigate chapters, reopen recent files, and optionally remember volume, mute, and playback position.
 - **Media information** – Inspect codecs, resolution, frame rate, audio channels, and subtitle tracks from the Window menu.
 - **Minimal UI** – Clean interface that fades away when idle, keeps focus on your content
@@ -102,7 +106,9 @@ Retagging is a compatibility workaround, not a general HEVC conversion: streams
 that depend on new parameter sets carried inside later frames may still fail.
 
 Subtitle files load in the background, with a 16 MiB input limit. UTF-8 and
-BOM-marked UTF-16 files are supported. Replacing or closing playback cancels
+BOM-marked UTF-16 files are read automatically. The import preview and External
+Text Encoding menu also support Big5, GB18030, and Shift-JIS without guessing
+between ambiguous encodings. Replacing or closing playback cancels
 pending preparation, seeks, subtitle loading, and held-key seeking, and releases
 the previous media's subtitle and Picture in Picture resources.
 
@@ -135,6 +141,8 @@ run requires both local media environment variables described above. See
 - **Subtitles → Appearance and Fonts…** styles decoded text captions in the main window. The caption popover also offers external-file loading and timing for embedded or external text. Positive delay displays captions later; negative delay displays them earlier, within a ±30-second range.
 - **Subtitles → Find Matching Subtitles…** searches only folders added under Settings → Subtitle Files. Matching uses the media basename and optional language/forced-caption tags, without scanning subfolders. Automatic finding respects Off and explicit track choices. Option–Left/Right adjusts subtitle timing by 0.1 seconds.
 - **Playback → After Playback** selects Stay at End, Rewind and Pause, Repeat File, or Close File. The same preference is available in General settings.
+- **Video** offers Always on Top, Fit/Fill, Original/16:9/4:3/21:9/1:1 aspect ratios, and window-size presets. The 50%/100%/200% presets account for Retina scaling and fit within the screen's visible area. These presentation choices apply to the main window; PiP retains native video presentation. Always on Top is suspended in fullscreen and restored on exit.
+- **Video → Capture Frame** saves a PNG through the system save dialog or copies it to the clipboard. Include Subtitles is off by default. Exports use the original video frame with its preferred orientation, independent of window scaling, at full resolution up to 8192 pixels per side; larger frames are downscaled. PNG output uses sRGB SDR color. Text captions use the current font, color, outline, background, and position, with size scaled for the exported image. No controls or window decorations are included.
 - **Window → Media Information…** (`⌘I`) shows the current file's streams and duration.
 - **SwiftPlayer → Settings…** (`⌘,`) saves language and appearance preferences, sets the maximum volume from 100% to 400% (200% by default), controls whether volume/mute are remembered, and enables optional resume. Turning resume off clears saved positions. Positions near the start or end are not resumed.
 
@@ -155,11 +163,27 @@ choices stay in local app storage. Turning off Remember tracks and subtitle
 timing clears those saved per-file choices. Up to 100 files are remembered;
 external subtitles and search folders use read-only security-scoped bookmarks.
 Language preferences supply the fallback when a saved track is unavailable.
+The selected external subtitle encoding is also remembered. Changing encoding
+from the Subtitles menu reloads the file; a failed decode preserves existing
+captions and the last successful encoding. Off stays Off during a reload.
 
 Seek previews use a throttled native image generator with relaxed image-extraction
 tolerance. Their memory-only image cache is limited to 32 thumbnails and 8 MiB,
 and clears when the media closes or changes. This cache limit does not include
 AVFoundation's internal decoder buffers. Audio-only files retain a time preview.
+
+Full-resolution frame capture runs separately from seek previews and permits
+one capture at a time across player windows. Image rendering/PNG encoding runs
+off the main thread and keeps no full-resolution image cache. Closing or replacing
+media cancels extraction and pending work; an atomic file write already in
+progress may finish. Explicit frame extraction uses exact image-generator
+tolerance without changing ordinary playback seeking. See
+[the native viewing review](NATIVE_VIEWING_REVIEW.md) for checks and limitations.
+
+Keep the display awake while video plays is enabled by default in General
+settings. Each playing video window owns an activity, so pausing one window
+does not release another's request. Audio-only playback does not hold a display
+activity. The setting is applied while playback is running.
 The main window uses decoded embedded text so appearance controls also work with
 tx3g captions. Picture in Picture uses native embedded captions and the system's
 appearance; external-file captions remain in the main window. Image-based or
@@ -192,6 +216,7 @@ Tested on: MacBook Air 2020 (Intel Core i3, dual-core) and MacBook Air M5 (2026)
 - **Left/Right Arrow** – Jump back/forward 5 seconds (hold to fast-seek)
 - **Up/Down Arrow** – Adjust volume by 5 percentage points
 - **Option–Left/Right Arrow** – Display subtitles 0.1 seconds earlier/later
+- **Control–Command–F** or **double-click the video** – Toggle fullscreen for that player window
 - **Home button** – Return to file selection screen
 
 ## License
