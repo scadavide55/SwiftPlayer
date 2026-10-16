@@ -218,6 +218,10 @@ final class PlayerModel: ObservableObject {
             // it without restoring the old rate over the user's new command.
             guard rate != fastSeekRate else { return }
             cancelFastSeekTask()
+        } else if fastSeekDirection != nil, rate != (playbackRequested ? playbackRate : 0) {
+            // Before the hold threshold, transport still uses the ordinary rate.
+            // A new native command must also cancel the pending hold timer.
+            cancelFastSeekTask()
         }
         let requested = rate != 0
         if playbackRequested != requested {

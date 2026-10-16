@@ -505,6 +505,29 @@ final class PlayerLifecycleTests: XCTestCase {
         XCTAssertTrue(model.playbackRequested)
     }
 
+    func testNativePauseBeforeHoldThresholdCancelsDelayedSeeking() async throws {
+        let model = try await loadedPlayer()
+        defer { model.teardown() }
+        model.beginFastSeeking(direction: 1)
+        model.player.pause()
+        try await Task.sleep(for: .milliseconds(950))
+        XCTAssertFalse(model.isFastSeeking)
+        XCTAssertFalse(model.playbackRequested)
+        XCTAssertEqual(model.player.rate, 0)
+    }
+
+    func testNativePlayBeforeReverseHoldThresholdKeepsPlaying() async throws {
+        let model = try await loadedPlayer()
+        defer { model.teardown() }
+        model.pause()
+        model.beginFastSeeking(direction: -1)
+        model.player.play()
+        try await Task.sleep(for: .milliseconds(950))
+        XCTAssertFalse(model.isFastSeeking)
+        XCTAssertTrue(model.playbackRequested)
+        XCTAssertEqual(model.player.rate, model.playbackRate)
+    }
+
     func testChangingHoldDirectionCancelsPreviousLoop() async throws {
         let model = try await loadedPlayer()
         defer { model.teardown() }
