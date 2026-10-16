@@ -51,6 +51,7 @@ final class FrameCaptureController: ObservableObject {
         let item: AVPlayerItem
         let time: CMTime
         let caption: FrameCaption?
+        let subtitles: SubtitleImageFrame?
     }
 
     private func request() -> Request? {
@@ -74,7 +75,9 @@ final class FrameCaptureController: ObservableObject {
                 outline: appearance.outline, backgroundOpacity: appearance.backgroundOpacity, position: appearance.position,
                 referenceHeight: viewing.subtitleReferenceHeight)
         }
-        return Request(item: item, time: clock, caption: caption)
+        let subtitles = includeSubtitles && model.mediaControls.subtitleSelection == "external" ? model.currentSubtitleImage : nil
+        if subtitles != nil { caption = nil }
+        return Request(item: item, time: clock, caption: caption, subtitles: subtitles)
     }
 
     func saveFrame() {
@@ -121,6 +124,7 @@ final class FrameCaptureController: ObservableObject {
         self.generator = generator
         let time = request.time
         let caption = request.caption
+        let subtitles = request.subtitles
         task = Task { [weak self, weak item = request.item] in
             defer {
                 FrameCaptureCoordinator.shared.finish()
@@ -139,7 +143,7 @@ final class FrameCaptureController: ObservableObject {
                 try Task.checkCancellation()
                 let worker = Task.detached(priority: .userInitiated) {
                     try autoreleasepool {
-                        let data = try FrameCaptureImage.png(result.image, caption: caption)
+                        let data = try FrameCaptureImage.png(result.image, caption: caption, subtitles: subtitles)
                         try Task.checkCancellation()
                         if let file {
                             let scoped = file.startAccessingSecurityScopedResource()

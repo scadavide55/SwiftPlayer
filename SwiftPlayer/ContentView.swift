@@ -162,7 +162,8 @@ private struct PlayerContentView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     CaptionOverlay(model: model, media: model.mediaControls, preferences: preferences,
-                                   controlsVisible: controlsVisible, nativeRendering: pipController.isActive)
+                                   controlsVisible: controlsVisible, nativeRendering: pipController.isActive,
+                                   display: windowControls.display, videoSize: windowControls.videoSize)
 
                     if controlsVisible {
                         ControlsOverlay(model: model)

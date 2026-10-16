@@ -15,7 +15,7 @@ A minimal, fully native video and audio player for macOS built with SwiftUI and 
 - **HEVC compatibility** – MP4/MOV/M4V files tagged `hev1` with VPS/SPS/PPS in their movie metadata open through a temporary `hvc1` compatibility copy. This preserves the original file, compressed video, audio, resolution, and quality. APFS uses a space-efficient clone; other volumes may require a full temporary copy. Temporary files are removed when playback closes or the file is replaced.
 - **Intuitive controls** – Play/pause, scrubber with time display, and keyboard shortcuts
 - **Pitch-preserving speed changes** – Playback uses AVFoundation's spectral time-pitch algorithm to keep voices and music at their original pitch as speed changes.
-- **Subtitle support** – Embedded text tracks plus SRT, VTT, and ASS/SSA files. Choose Off, Automatic, individual tracks, or an external file, and set a preferred language.
+- **Subtitle support** – Embedded text tracks plus SRT, VTT, ASS/SSA, and external PGS (`.sup`) files. PGS retains its image colors and positions, including in optional subtitle frame captures. Choose Off, Automatic, individual tracks, or an external file, and set a preferred language.
 - **Subtitle appearance** – Choose a font, size, text color, outline, background opacity, and position with a live preview.
 - **Audio languages** – Select an audio track or use a preferred language automatically.
 - **Audio level controls** – Protect boosted peaks with a linked limiter, and optionally normalize quiet and loud passages. Peak protection is on by default; normalization is off.
@@ -114,6 +114,13 @@ Text Encoding menu also support Big5, GB18030, and Shift-JIS without guessing
 between ambiguous encodings. Replacing or closing playback cancels
 pending preparation, seeks, subtitle loading, and held-key seeking, and releases
 the previous media's subtitle and Picture in Picture resources.
+
+External PGS image subtitles stream from files up to 128 MiB, with at most
+30,000 captions and a 64 MiB retained compressed-data budget. Only the active
+caption is rendered, with at most 32 MiB of decoded image pixels. Image
+subtitles use their original colors and positions; font settings and text
+encoding do not apply. They follow subtitle delay, Off, seeking, and video
+scaling, and remain in the main window during Picture in Picture.
 
 ## Shared playback core
 

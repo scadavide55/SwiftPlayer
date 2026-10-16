@@ -20,6 +20,7 @@ final class PlayerModel: ObservableObject {
     @Published var currentFileName: String = ""
     @Published var subtitleCues: [SubtitleCue] = [] {
         didSet {
+            cancelSubtitleImage()
             subtitleOrder = subtitleCues.indices.sorted { subtitleCues[$0].start < subtitleCues[$1].start }
             var maximumEnd = -Double.infinity
             subtitleMaximumEnds = subtitleOrder.map {
@@ -39,6 +40,10 @@ final class PlayerModel: ObservableObject {
         }
     }
     @Published var currentSubtitleText: String = ""
+    @Published private(set) var currentSubtitleImage: SubtitleImageFrame?
+    private var subtitleImageTask: Task<Void, Never>?
+    private var subtitleImageIdentifier = UUID()
+    private var renderedSubtitleIndex: Int?
     @Published var playbackFailed: Bool = false
     @Published var playbackErrorMessage: String = ""
     @Published var isLoading: Bool = false
@@ -225,6 +230,7 @@ final class PlayerModel: ObservableObject {
     deinit {
         loadTask?.cancel()
         subtitleLoadTask?.cancel()
+        subtitleImageTask?.cancel()
         fastSeekTask?.cancel()
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         if let failureObserver { NotificationCenter.default.removeObserver(failureObserver) }
@@ -555,6 +561,7 @@ final class PlayerModel: ObservableObject {
     func updateSubtitleDisplay() {
         guard subtitlesEnabled, !subtitleCues.isEmpty else {
             if !currentSubtitleText.isEmpty { currentSubtitleText = "" }
+            cancelSubtitleImage()
             return
         }
         let adjustedTime = currentTime - subtitleOffset
@@ -568,17 +575,42 @@ final class PlayerModel: ObservableObject {
             else { upper = middle }
         }
         var text = ""
+        var activeIndex: Int?
         if lower < subtitleCues.count {
             for index in subtitleOrder[lower...] {
                 let cue = subtitleCues[index]
                 if cue.start > adjustedTime { break }
-                if cue.end > adjustedTime { text = cue.text; break }
+                if cue.end > adjustedTime { text = cue.text; activeIndex = index; break }
             }
         }
         if currentSubtitleText != text { currentSubtitleText = text }
+        if mediaControls.subtitleSelection == "external", let activeIndex, let bitmap = subtitleCues[activeIndex].bitmap {
+            if renderedSubtitleIndex != activeIndex {
+                cancelSubtitleImage()
+                renderedSubtitleIndex = activeIndex
+                let generation = subtitleImageIdentifier
+                subtitleImageTask = Task { [weak self] in
+                    let worker = Task.detached(priority: .userInitiated) { try bitmap.render() }
+                    let image = try? await withTaskCancellationHandler { try await worker.value } onCancel: { worker.cancel() }
+                    guard let self, self.subtitleImageIdentifier == generation, !Task.isCancelled else { return }
+                    self.currentSubtitleImage = image
+                    self.subtitleImageTask = nil
+                    if image == nil { self.mediaControls.externalSubtitlesUnavailable() }
+                }
+            }
+        } else { cancelSubtitleImage() }
+    }
+
+    private func cancelSubtitleImage() {
+        subtitleImageIdentifier = UUID()
+        subtitleImageTask?.cancel()
+        subtitleImageTask = nil
+        renderedSubtitleIndex = nil
+        if currentSubtitleImage != nil { currentSubtitleImage = nil }
     }
     /// Call on window close / app termination to release decoder resources immediately.
     func teardown() {
+        cancelSubtitleImage()
         saveHistory(force: true)
         historySession = nil
         historyCompleted = false

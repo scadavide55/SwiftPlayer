@@ -2,15 +2,17 @@ import Foundation
 
 struct SubtitleCue: Sendable {
     let start: Double
-    let end: Double
+    var end: Double
     let text: String
+    var bitmap: BitmapSubtitle? = nil
 }
 
-nonisolated let supportedSubtitleExtensions: [String] = ["srt", "vtt", "ass", "ssa"]
+nonisolated let supportedSubtitleExtensions: [String] = ["srt", "vtt", "ass", "ssa", "sup"]
 
 nonisolated func parseSubtitles(from url: URL, encoding: SubtitleEncoding = .automatic) -> [SubtitleCue] {
     let scoped = url.startAccessingSecurityScopedResource()
     defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+    if url.pathExtension.lowercased() == "sup" { return (try? PGSSubtitleParser.load(url)) ?? [] }
     guard !Task.isCancelled, let input = try? FileHandle(forReadingFrom: url) else { return [] }
     defer { try? input.close() }
     let maximumBytes = 16 * 1024 * 1024
