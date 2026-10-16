@@ -34,6 +34,7 @@ A minimal, fully native video and audio player for macOS built with SwiftUI and 
 - **Minimal UI** – Clean interface that fades away when idle, keeps focus on your content
 - **Drag & drop** – Load media by dragging files directly onto the window
 - **Keyboard navigation** – Left/Right seek (5-second jumps or continuous fast-forward/reverse), Up/Down adjust volume in 5-percentage-point steps, and Space plays/pauses. Volume defaults to a 200% ceiling; 0% mutes.
+- **Frame stepping** – Control–Left/Right pauses and steps the video backward/forward by one native frame. Playback → Previous Frame/Next Frame provides the same controls where supported.
 
 ## Supported Formats
 
@@ -140,6 +141,7 @@ run requires both local media environment variables described above. See
 - **File → Open File…** (`⌘O`) or **Open Recent** opens one file. Recent files use read-only security-scoped bookmarks, with up to ten entries. A multiple-file queue is deferred.
 - **File → Playback History…** (`⇧⌘H`) searches up to 200 files, with All/Unfinished/Finished filters and per-file progress. Continue explicitly restores progress independently of automatic resume; finished files open from the beginning. Missing files remain listed until removed or expired. History is recorded by default, with 90-day retention; General settings offers 30/90/365 days, disable, and Clear History. Turning history off clears its list and progress. Clear/remove also invalidates existing playback sessions so they cannot silently recreate removed entries.
 - **Playback → Jump to Time…** (`⌘J`) accepts seconds, minutes:seconds, or hours:minutes:seconds. Chapter navigation appears when the file supplies chapter titles. Changing position preserves pause.
+- **Playback → Previous Frame / Next Frame** (`⌃←` / `⌃→`) pauses video and steps through its native timeline, including variable frame intervals. It cancels held-key seeking and pending ordinary seeks. Audio-only files and unsupported directions are disabled. Ordinary seeking retains the default AVFoundation tolerance. macOS may reserve these shortcuts for switching Spaces; if so, use the menu commands or change those assignments in System Settings → Keyboard → Keyboard Shortcuts → Mission Control.
 - **Audio → Audio track** selects an embedded audio track. The preferred language applies while the selector is Automatic.
 - **Subtitles → Subtitle track** offers Off, Automatic, embedded choices, and a loaded external file. Automatic prefers a full subtitle option in the preferred language, falling back to the first full option before forced-only captions. Explicit track choices take precedence over language preferences.
 - **Subtitles → Appearance and Fonts…** styles decoded text captions in the main window. The caption popover also offers external-file loading and timing for embedded or external text. Positive delay displays captions later; negative delay displays them earlier, within a ±30-second range.
@@ -227,6 +229,7 @@ Tested on: MacBook Air 2020 (Intel Core i3, dual-core) and MacBook Air M5 (2026)
 
 - **Space** – Play/pause
 - **Left/Right Arrow** – Jump back/forward 5 seconds (hold to fast-seek)
+- **Control–Left/Right Arrow** – Pause and step backward/forward one video frame
 - **Up/Down Arrow** – Adjust volume by 5 percentage points
 - **Option–Left/Right Arrow** – Display subtitles 0.1 seconds earlier/later
 - **Control–Command–F** or **double-click the video** – Toggle fullscreen for that player window

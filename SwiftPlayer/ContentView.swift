@@ -183,7 +183,8 @@ private struct PlayerContentView: View {
                     onArrowDown: { direction in handleArrowDown(direction: direction) },
                     onArrowUp: { handleArrowUp() },
                     onVolumeUp: { model.volumeUp() },
-                    onVolumeDown: { model.volumeDown() }
+                    onVolumeDown: { model.volumeDown() },
+                    onFrameStep: { direction in model.stepFrame(direction: direction); registerActivity() }
                 ))
                 .onAppear {
                     registerActivity()
@@ -490,6 +491,7 @@ struct KeyEventHandlingView: NSViewRepresentable {
     let onArrowUp: () -> Void
     let onVolumeUp: () -> Void
     let onVolumeDown: () -> Void
+    let onFrameStep: (Int) -> Void
 
     func makeNSView(context: Context) -> KeyCatcherView {
         let view = KeyCatcherView()
@@ -498,6 +500,7 @@ struct KeyEventHandlingView: NSViewRepresentable {
         view.onArrowUp = onArrowUp
         view.onVolumeUp = onVolumeUp
         view.onVolumeDown = onVolumeDown
+        view.onFrameStep = onFrameStep
         return view
     }
 
@@ -507,6 +510,7 @@ struct KeyEventHandlingView: NSViewRepresentable {
         nsView.onArrowUp = onArrowUp
         nsView.onVolumeUp = onVolumeUp
         nsView.onVolumeDown = onVolumeDown
+        nsView.onFrameStep = onFrameStep
     }
 
     static func dismantleNSView(_ nsView: KeyCatcherView, coordinator: ()) {
@@ -516,6 +520,7 @@ struct KeyEventHandlingView: NSViewRepresentable {
         nsView.onArrowUp = nil
         nsView.onVolumeUp = nil
         nsView.onVolumeDown = nil
+        nsView.onFrameStep = nil
     }
 
     final class KeyCatcherView: NSView {
@@ -524,6 +529,7 @@ struct KeyEventHandlingView: NSViewRepresentable {
         var onArrowUp: (() -> Void)?
         var onVolumeUp: (() -> Void)?
         var onVolumeDown: (() -> Void)?
+        var onFrameStep: ((Int) -> Void)?
 
         override var acceptsFirstResponder: Bool { true }
 
@@ -539,6 +545,11 @@ struct KeyEventHandlingView: NSViewRepresentable {
         }
 
         override func keyDown(with event: NSEvent) {
+            let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+            if modifiers == .control, event.keyCode == 123 || event.keyCode == 124 {
+                onFrameStep?(event.keyCode == 123 ? -1 : 1)
+                return
+            }
             guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty else {
                 super.keyDown(with: event)
                 return
