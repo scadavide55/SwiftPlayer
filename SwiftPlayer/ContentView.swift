@@ -529,6 +529,7 @@ struct KeyEventHandlingView: NSViewRepresentable {
     }
 
     static func dismantleNSView(_ nsView: KeyCatcherView, coordinator: ()) {
+        nsView.invalidateKeyMonitor()
         nsView.onArrowUp?()
         nsView.onSpace = nil
         nsView.onArrowDown = nil
@@ -545,54 +546,82 @@ struct KeyEventHandlingView: NSViewRepresentable {
         var onVolumeUp: (() -> Void)?
         var onVolumeDown: (() -> Void)?
         var onFrameStep: ((Int) -> Void)?
+        private var keyMonitor: Any?
+        private var hasActiveArrow = false
 
         override var acceptsFirstResponder: Bool { true }
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            if hasActiveArrow { onArrowUp?() }
+            invalidateKeyMonitor()
+            if window != nil {
+                keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
+                    guard let self, let window = self.window, event.window === window,
+                          window.attachedSheet == nil else { return event }
+                    if let editor = window.firstResponder as? NSTextView, editor.isEditable,
+                       !(event.type == .keyUp && self.hasActiveArrow) { return event }
+                    return self.handlePlaybackKey(event) ? nil : event
+                }
+            }
             window?.makeFirstResponder(self)
+        }
+
+        func invalidateKeyMonitor() {
+            if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+            keyMonitor = nil
+            hasActiveArrow = false
         }
 
         override func resignFirstResponder() -> Bool {
             let resigned = super.resignFirstResponder()
-            if resigned { onArrowUp?() }
+            if resigned { hasActiveArrow = false; onArrowUp?() }
             return resigned
         }
 
         override func keyDown(with event: NSEvent) {
+            if !handlePlaybackKey(event) { super.keyDown(with: event) }
+        }
+
+        private func handlePlaybackKey(_ event: NSEvent) -> Bool {
+            if event.type == .keyUp {
+                guard event.keyCode == 123 || event.keyCode == 124 else { return false }
+                hasActiveArrow = false
+                onArrowUp?()
+                return true
+            }
             let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
             if modifiers == .control, event.keyCode == 123 || event.keyCode == 124 {
                 onFrameStep?(event.keyCode == 123 ? -1 : 1)
-                return
+                return true
             }
             guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty else {
-                super.keyDown(with: event)
-                return
+                return false
             }
             switch event.keyCode {
             case 49: // space
                 if !event.isARepeat { onSpace?() }
             case 123: // left arrow
+                hasActiveArrow = true
                 onArrowDown?(-1)
             case 124: // right arrow
+                hasActiveArrow = true
                 onArrowDown?(1)
             case 126: // up arrow
                 onVolumeUp?()
             case 125: // down arrow
                 onVolumeDown?()
             default:
-                super.keyDown(with: event)
+                return false
             }
+            return true
         }
 
         override func keyUp(with event: NSEvent) {
-            switch event.keyCode {
-            case 123, 124:
-                onArrowUp?()
-            default:
-                super.keyUp(with: event)
-            }
+            if !handlePlaybackKey(event) { super.keyUp(with: event) }
         }
+
+        deinit { if let keyMonitor { NSEvent.removeMonitor(keyMonitor) } }
 
         override func hitTest(_ point: NSPoint) -> NSView? {
             nil
