@@ -106,6 +106,7 @@ final class PlayerModel: ObservableObject {
     private var failureObserver: NSObjectProtocol?
     private var subtitleLoadTask: Task<Void, Never>?
     private var subtitleLoadIdentifier = UUID()
+    private var externalSubtitleLocation: (url: URL, folder: URL?)?
     private var subtitleMaximumEnds: [Double] = []
     private var subtitleOrder: [Int] = []
     private var fastSeekTask: Task<Void, Never>?
@@ -122,7 +123,10 @@ final class PlayerModel: ObservableObject {
         mediaControls.onSubtitleDelayChanged = { [weak self] delay in
             if self?.subtitleOffset != delay { self?.subtitleOffset = delay }
         }
-        mediaControls.onRestoreExternalSubtitles = { [weak self] url in self?.loadSubtitles(url: url) }
+        mediaControls.onRestoreExternalSubtitles = { [weak self] url in
+            guard let self else { return }
+            self.loadSubtitles(url: url, encoding: self.mediaControls.externalSubtitleEncoding)
+        }
         if let preferences {
             audioProcessingObservation = preferences.$limitAudioPeaks.combineLatest(preferences.$normalizeAudio)
                 .sink { [weak self] limiter, normalization in
@@ -459,7 +463,13 @@ final class PlayerModel: ObservableObject {
 
     var hasPendingSubtitleLoad: Bool { subtitleLoadTask != nil }
 
-    func loadSubtitles(url: URL, accessing folder: URL? = nil) {
+    func reloadSubtitles(encoding: SubtitleEncoding) {
+        guard let location = externalSubtitleLocation else { return }
+        loadSubtitles(url: location.url, accessing: location.folder, encoding: encoding, activate: false)
+    }
+
+    func loadSubtitles(url: URL, accessing folder: URL? = nil,
+                       encoding: SubtitleEncoding = .automatic, activate: Bool = true) {
         subtitleLoadTask?.cancel()
         subtitleLoadIdentifier = UUID()
         let identifier = subtitleLoadIdentifier
@@ -472,7 +482,7 @@ final class PlayerModel: ObservableObject {
                     if scoped { url.stopAccessingSecurityScopedResource() }
                     if folderScoped { folder?.stopAccessingSecurityScopedResource() }
                 }
-                return (parseSubtitles(from: url), SubtitleFileReference.capture(url))
+                return (parseSubtitles(from: url, encoding: encoding), SubtitleFileReference.capture(url))
             }
             let (cues, reference) = await withTaskCancellationHandler {
                 await worker.value
@@ -486,9 +496,10 @@ final class PlayerModel: ObservableObject {
                 return
             }
             self.subtitleCues = cues
+            self.externalSubtitleLocation = (url, folder)
             self.subtitlesEnabled = true
             self.mediaControls.useExternalSubtitles(named: url.lastPathComponent, reference: reference,
-                activate: self.mediaControls.subtitleSelectionRevision == selectionRevision)
+                encoding: encoding, activate: activate && self.mediaControls.subtitleSelectionRevision == selectionRevision)
             self.subtitleLoadTask = nil
         }
     }
@@ -530,6 +541,7 @@ final class PlayerModel: ObservableObject {
         subtitleLoadTask?.cancel()
         subtitleLoadTask = nil
         seekIdentifier = UUID()
+        externalSubtitleLocation = nil
         isSeeking = false
         itemStatusObservation = nil
         itemDurationObservation = nil

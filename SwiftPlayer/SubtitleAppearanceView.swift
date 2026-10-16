@@ -82,6 +82,7 @@ struct PlayerPreferencesView: View {
                     Toggle("Show embedded subtitles automatically", isOn: $preferences.subtitlesByDefault)
                 }
                 Section("Playback") {
+                    Toggle("Keep the display awake while video plays", isOn: $preferences.keepDisplayAwake)
                     HStack {
                         Text("Maximum volume")
                         Slider(value: $preferences.maximumVolume, in: 1...4, step: 0.05)

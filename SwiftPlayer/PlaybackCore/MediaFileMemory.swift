@@ -37,6 +37,7 @@ struct MediaFileMemory: Codable, Equatable {
     var subtitleOption: Data?
     var externalSubtitle: SubtitleFileReference?
     var subtitleDelay: Double = 0
+    var subtitleEncoding: SubtitleEncoding?
 
     var normalized: Self {
         var value = self

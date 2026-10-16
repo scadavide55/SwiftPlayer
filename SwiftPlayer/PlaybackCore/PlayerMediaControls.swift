@@ -66,6 +66,7 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
     private var restoringMemory = false
     private var didDiscoverTracks = false
     @Published private(set) var externalSubtitleName = ""
+    @Published private(set) var externalSubtitleEncoding: SubtitleEncoding = .automatic
     var nativeSubtitleRendering = false {
         didSet { legibleOutput?.suppressesPlayerRendering = !nativeSubtitleRendering }
     }
@@ -266,6 +267,7 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
         case "track": subtitleSelection = choiceID(for: memory.subtitleOption, group: subtitleGroup, choices: subtitleTracks) ?? "automatic"
         case "external":
             if let url = memory.externalSubtitle?.resolve() {
+                externalSubtitleEncoding = memory.subtitleEncoding ?? .automatic
                 externalReference = memory.externalSubtitle
                 externalSubtitleName = url.lastPathComponent
                 subtitleSelection = "external"
@@ -284,12 +286,14 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
             audioOption: Self.optionData(audioTracks.first(where: { $0.id == audioSelection })?.option),
             subtitleMode: subtitle != nil ? "track" : subtitleSelection,
             subtitleOption: Self.optionData(subtitle?.option), externalSubtitle: externalReference,
-            subtitleDelay: subtitleDelay)
+            subtitleDelay: subtitleDelay, subtitleEncoding: externalSubtitleEncoding)
         preferences?.saveMediaMemory(memory, for: sourceURL)
     }
 
-    func useExternalSubtitles(named name: String, reference: SubtitleFileReference? = nil, activate: Bool = true) {
+    func useExternalSubtitles(named name: String, reference: SubtitleFileReference? = nil,
+                              encoding: SubtitleEncoding = .automatic, activate: Bool = true) {
         externalSubtitleName = name
+        externalSubtitleEncoding = encoding
         externalReference = reference
         subtitleStatusMessage = ""
         if activate { subtitleSelection = "external" }
@@ -346,6 +350,7 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
         captionTimeline.reset()
         embeddedText = ""
         externalSubtitleName = ""
+        externalSubtitleEncoding = .automatic
         informationError = ""
         isDiscovering = false
         restoringMemory = false

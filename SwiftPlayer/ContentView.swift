@@ -19,6 +19,9 @@ private struct PlayerContentView: View {
     @ObservedObject private var preferences = PlayerPreferences.shared
     @StateObject private var pipController = PiPController()
     @StateObject private var subtitleSearch = SubtitleSearchController()
+    @StateObject private var displaySleep = DisplaySleepController()
+    @StateObject private var windowControls = PlayerWindowControls()
+    @StateObject private var frameCapture = FrameCaptureController()
     @ObservedObject private var subtitleFolders = SubtitleFolderStore.shared
     @State private var showSubtitleMatches = false
     @State private var hasLoadedFile: Bool = false
@@ -33,7 +36,7 @@ private struct PlayerContentView: View {
     @State private var isTargeted: Bool = false
     @State private var showHomeConfirm: Bool = false
     @State private var showSubtitlePanel: Bool = false
-    @State private var isFullScreen: Bool = false
+    @State private var subtitleImport: SubtitleImportRequest?
     @State private var showAppearance = false
     @State private var showJump = false
     @State private var showInformation = false
@@ -48,7 +51,7 @@ private struct PlayerContentView: View {
                 }
             }
         }
-        .background(PlayerCommandFocus(context: PlayerWindowContext(menus: menuState, open: requestOpen,
+        .background(PlayerCommandFocus(context: PlayerWindowContext(menus: menuState, viewing: windowControls, capture: frameCapture, open: requestOpen,
             jump: { showJump = true }, information: { showInformation = true },
             subtitles: openSubtitlePicker, findSubtitles: {
                 showSubtitleMatches = true
@@ -63,6 +66,11 @@ private struct PlayerContentView: View {
         .sheet(isPresented: $showSubtitleMatches) {
             SubtitleMatchesView(search: subtitleSearch) { model.loadSubtitles(url: $0.url, accessing: $0.folder) }
         }
+        .sheet(item: $subtitleImport) { request in
+            SubtitleImportView(url: request.url, encoding: .automatic) { encoding in
+                model.loadSubtitles(url: request.url, encoding: encoding)
+            }
+        }
         .sheet(isPresented: $showJump) { JumpToTimeView(duration: model.duration) { model.seek(to: $0) } }
         .sheet(isPresented: $showInformation) { MediaInformationView(model: model, media: model.mediaControls) }
         .onChange(of: model.isLoading) { loading in
@@ -70,15 +78,31 @@ private struct PlayerContentView: View {
                 RecentMediaStore.shared.record(url)
             }
         }
-        .onChange(of: model.sourceURL) { _ in startSubtitleSearch(automatic: true) }
+        .onChange(of: model.sourceURL) { _ in frameCapture.cancel(); startSubtitleSearch(automatic: true) }
         .onChange(of: subtitleFolders.entries.map(\.id)) { _ in startSubtitleSearch(automatic: !showSubtitleMatches) }
         .onChange(of: preferences.autoFindSubtitles) { _ in startSubtitleSearch(automatic: true) }
         .onChange(of: preferences.subtitleLanguage) { _ in startSubtitleSearch(automatic: true) }
         .onChange(of: model.closedAtEnd) { closed in if closed { goHome() } }
+        .onAppear {
+            displaySleep.attach(model: model, preferences: preferences)
+            windowControls.observe(model.player)
+            frameCapture.attach(model: model, preferences: preferences, viewing: windowControls)
+        }
         .onChange(of: pipController.isActive) { active in model.mediaControls.nativeSubtitleRendering = active }
         .frame(minWidth: 480, minHeight: 320)
-        .background(PlayerWindowObserver(onFullScreenChanged: { isFullScreen = $0 },
-                                         onResignKey: { stopInteractions() }))
+        .overlay(alignment: .bottomTrailing) {
+            if frameCapture.isCapturing {
+                ProgressView("Capturing frame…").controlSize(.small).padding(12)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                    .padding(12).allowsHitTesting(false)
+            }
+        }
+        .alert("Couldn't capture the frame", isPresented: Binding(get: { frameCapture.errorMessage != nil },
+            set: { if !$0 { frameCapture.errorMessage = nil } })) {
+            Button("OK") { frameCapture.errorMessage = nil }
+        } message: { Text(frameCapture.errorMessage ?? "") }
+        .background(PlayerWindowObserver(onResignKey: { stopInteractions() },
+                                         onWindowChanged: { windowControls.attach($0) }))
         .alert("Replace current video?", isPresented: $showReplaceConfirm, presenting: pendingReplacementURL) { url in
             Button("Replace", role: .destructive) {
                 load(url: url)
@@ -90,6 +114,9 @@ private struct PlayerContentView: View {
             Text("This will stop the current playback and load “\(url.lastPathComponent)”.")
         }
         .onDisappear {
+            displaySleep.detach()
+            windowControls.detach()
+            frameCapture.detach()
             subtitleSearch.cancel()
             stopInteractions()
             pipController.detach()
@@ -110,7 +137,8 @@ private struct PlayerContentView: View {
     private var playingState: some View {
             ZStack(alignment: .topLeading) {
                 ZStack(alignment: .bottom) {
-                    PlayerLayerView(player: model.player) { layer in
+                    PlayerLayerView(player: model.player, display: windowControls.display,
+                                    onDoubleClick: { registerActivity(); toggleFullScreen() }) { layer in
                         pipController.attach(to: layer)
                     }
                     .ignoresSafeArea()
@@ -221,7 +249,7 @@ private struct PlayerContentView: View {
                                     Button {
                                         toggleFullScreen()
                                     } label: {
-                                        Image(systemName: isFullScreen
+                                        Image(systemName: windowControls.isFullScreen
                                               ? "arrow.down.right.and.arrow.up.left"
                                               : "arrow.up.left.and.arrow.down.right")
                                             .font(.system(size: 14, weight: .semibold))
@@ -245,7 +273,7 @@ private struct PlayerContentView: View {
 
                                     }
                                     .buttonStyle(.plain)
-                                    .help(isFullScreen ? "Exit Full Screen" : "Enter Full Screen")
+                                    .help(windowControls.isFullScreen ? "Exit Full Screen" : "Enter Full Screen")
 
                                     Button {
                                         showSubtitlePanel = true
@@ -273,6 +301,7 @@ private struct PlayerContentView: View {
     private var isInteracting: Bool {
         model.isScrubbing || model.isLoading || model.playbackFailed || model.playbackFinished
             || showSubtitlePanel || showHomeConfirm || showReplaceConfirm || showAppearance || showJump || showInformation
+            || subtitleImport != nil
     }
 
     private func goHome() {
@@ -282,11 +311,12 @@ private struct PlayerContentView: View {
         hasLoadedFile = false
         activeSourceURL = nil
         showSubtitlePanel = false
+        subtitleImport = nil
         pendingReplacementURL = nil
     }
 
     private func toggleFullScreen() {
-        NSApplication.shared.keyWindow?.toggleFullScreen(nil)
+        windowControls.toggleFullScreen()
     }
 
     private func handleArrowDown(direction: Int) {
@@ -314,7 +344,8 @@ private struct PlayerContentView: View {
         panel.allowedContentTypes = supportedSubtitleExtensions.compactMap { UTType(filenameExtension: $0) }
 
         if panel.runModal() == .OK, let url = panel.url {
-            model.loadSubtitles(url: url)
+            showSubtitlePanel = false
+            subtitleImport = SubtitleImportRequest(url: url)
         }
     }
 
@@ -325,6 +356,7 @@ private struct PlayerContentView: View {
     }
 
     private func load(url: URL) {
+        subtitleImport = nil
         stopInteractions()
         pipController.stop()
         activeSourceURL = url
