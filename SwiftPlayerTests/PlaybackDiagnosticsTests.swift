@@ -84,6 +84,25 @@ final class PlaybackDiagnosticsTests: DebugMatrixTestCase {
         XCTAssertEqual(PlaybackDiagnosticSnapshot.capture(model).state, .failed)
     }
 
+    func testOrdinaryPendingSeeksAreReportedUntilTheLatestSeekCompletes() async throws {
+        let model = PlayerModel()
+        defer { model.teardown() }
+        try await ready(model)
+        XCTAssertEqual(PlaybackDiagnosticSnapshot.capture(model).state, .paused)
+        for target in [8.0, 3, 11, 2] {
+            model.seek(to: target)
+            XCTAssertEqual(PlaybackDiagnosticSnapshot.capture(model).state, .seeking)
+        }
+        try await waitUntilCondition {
+            abs(model.player.currentTime().seconds - 2) < 0.1 &&
+            PlaybackDiagnosticSnapshot.capture(model).state == .paused
+        }
+        XCTAssertFalse(model.playbackRequested)
+        model.seek(to: 8)
+        model.teardown()
+        XCTAssertEqual(PlaybackDiagnosticSnapshot.capture(model).state, .noMedia)
+    }
+
     func testEffectiveClockRateIncludesPausedAndSlowerSourceTimebases() throws {
         var source: CMTimebase?
         XCTAssertEqual(CMTimebaseCreateWithSourceClock(allocator: kCFAllocatorDefault,

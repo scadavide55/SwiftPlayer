@@ -95,7 +95,8 @@ nonisolated struct PlaybackDiagnosticSnapshot: Equatable, Sendable {
         var result = Self()
         result.state = state(hasItem: item != nil, status: item?.status ?? .unknown, timeStatus: player.timeControlStatus,
             waitingReason: reason, requested: model.playbackRequested, loading: model.isLoading,
-            failed: model.playbackFailed, finished: model.playbackFinished, seeking: model.isScrubbing || model.isFastSeeking)
+            failed: model.playbackFailed, finished: model.playbackFinished,
+            seeking: model.isSeeking || model.isScrubbing || model.isFastSeeking)
         if player.timeControlStatus == .waitingToPlayAtSpecifiedRate { result.waitingReason = Self.reason(reason) }
         result.position = item != nil && time.isFinite && time >= 0 ? time : nil
         result.duration = model.duration.isFinite && model.duration > 0 ? model.duration : nil

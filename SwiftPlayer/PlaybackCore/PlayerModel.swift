@@ -125,7 +125,7 @@ final class PlayerModel: ObservableObject {
     private var fastSeekDirection: Int?
     private var fastSeekRate: Float?
     private var seekIdentifier = UUID()
-    private var isSeeking = false
+    private(set) var isSeeking = false
     
     init(preferences: PlayerPreferences? = nil, history: PlaybackHistoryStore? = nil) {
         let nativePlayer = AVPlayer()
