@@ -37,9 +37,34 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
         didSet {
             if oldValue != subtitleSelection { subtitleSelectionRevision &+= 1 }
             applySubtitleSelection()
+            saveMemory()
         }
     }
-    @Published var audioSelection = "automatic" { didSet { applyAudioSelection() } }
+    private var audioSelectionRevision = 0
+    @Published var audioSelection = "automatic" {
+        didSet {
+            if oldValue != audioSelection { audioSelectionRevision &+= 1 }
+            applyAudioSelection()
+            saveMemory()
+        }
+    }
+    @Published var subtitleDelay: Double = 0 {
+        didSet {
+            let value = subtitleDelay.isFinite ? min(max(subtitleDelay, -30), 30) : oldValue
+            if subtitleDelay != value { subtitleDelay = value; return }
+            renderEmbeddedText(at: player?.currentTime().seconds ?? 0)
+            onSubtitleDelayChanged?(subtitleDelay)
+            saveMemory()
+        }
+    }
+    @Published private(set) var subtitleStatusMessage = ""
+    var onSubtitleDelayChanged: ((Double) -> Void)?
+    var onRestoreExternalSubtitles: ((URL) -> Void)?
+    private var captionTimeline = CaptionTimeline()
+    private var externalReference: SubtitleFileReference?
+    private var pendingMemory: MediaFileMemory?
+    private var restoringMemory = false
+    private var didDiscoverTracks = false
     @Published private(set) var externalSubtitleName = ""
     var nativeSubtitleRendering = false {
         didSet { legibleOutput?.suppressesPlayerRendering = !nativeSubtitleRendering }
@@ -87,17 +112,27 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
 
     func attach(to item: AVPlayerItem, sourceURL: URL) {
         detach()
+        restoringMemory = true
         self.item = item
         self.sourceURL = sourceURL
+        pendingMemory = preferences?.mediaMemory(for: sourceURL)
         pendingResume = preferences?.resumeTime(for: sourceURL)
         subtitleSelection = preferences?.subtitlesByDefault == false ? "off" : "automatic"
         audioSelection = "automatic"
+        subtitleDelay = pendingMemory?.subtitleDelay ?? 0
+        let initialSubtitleRevision = subtitleSelectionRevision
+        let initialAudioRevision = audioSelectionRevision
         let output = AVPlayerItemLegibleOutput()
         output.suppressesPlayerRendering = !nativeSubtitleRendering
+        // Configure lookahead before attaching. Changing this property on an
+        // attached output can stop native caption delivery after seeking.
+        // The bounded timeline schedules both early and delayed presentation.
+        output.advanceIntervalForDelegateInvocation = 30
         output.setDelegate(self, queue: .main)
         item.add(output)
         legibleOutput = output
         isDiscovering = true
+        restoringMemory = false
         let generation = identifier
         let asset = item.asset
         discoveryTask = Task { [weak self, weak item] in
@@ -140,6 +175,9 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
                 self.audioTracks = Self.choices(audio, prefix: "audio")
                 self.chapters = chapters
                 self.streams = streams
+                self.restoreMemory(subtitlesUnchanged: self.subtitleSelectionRevision == initialSubtitleRevision,
+                                   audioUnchanged: self.audioSelectionRevision == initialAudioRevision)
+                self.didDiscoverTracks = true
                 if item.status == .readyToPlay {
                     self.applySubtitleSelection()
                     self.applyAudioSelection()
@@ -176,7 +214,7 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
     }
 
     private func applySubtitleSelection() {
-        if subtitleSelection == "off" || subtitleSelection == "external" { embeddedText = "" }
+        if subtitleSelection == "off" || subtitleSelection == "external" { captionTimeline.reset(); embeddedText = "" }
         guard let item, let group = subtitleGroup else { return }
         let option: AVMediaSelectionOption?
         switch subtitleSelection {
@@ -190,6 +228,7 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
             option = choice.option
         }
         if item.currentMediaSelection.selectedMediaOption(in: group) != option {
+            captionTimeline.reset()
             embeddedText = ""
             item.select(option, in: group)
         }
@@ -204,12 +243,65 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
         } else if let choice = audioTracks.first(where: { $0.id == audioSelection }) { item.select(choice.option, in: group) }
     }
 
-    func useExternalSubtitles(named name: String, activate: Bool = true) {
+    private static func optionData(_ option: AVMediaSelectionOption?) -> Data? {
+        guard let option else { return nil }
+        return try? PropertyListSerialization.data(fromPropertyList: option.propertyList(), format: .binary, options: 0)
+    }
+
+    private func choiceID(for data: Data?, group: AVMediaSelectionGroup?, choices: [MediaTrackChoice]) -> String? {
+        guard let data, let group, let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil),
+              let option = group.mediaSelectionOption(withPropertyList: plist) else { return nil }
+        return choices.first(where: { $0.option == option })?.id
+    }
+
+    private func restoreMemory(subtitlesUnchanged: Bool, audioUnchanged: Bool) {
+        guard let memory = pendingMemory else { return }
+        pendingMemory = nil
+        restoringMemory = true
+        defer { restoringMemory = false }
+        if audioUnchanged { audioSelection = choiceID(for: memory.audioOption, group: audioGroup, choices: audioTracks) ?? "automatic" }
+        guard subtitlesUnchanged else { return }
+        switch memory.subtitleMode {
+        case "off": subtitleSelection = "off"
+        case "track": subtitleSelection = choiceID(for: memory.subtitleOption, group: subtitleGroup, choices: subtitleTracks) ?? "automatic"
+        case "external":
+            if let url = memory.externalSubtitle?.resolve() {
+                externalReference = memory.externalSubtitle
+                externalSubtitleName = url.lastPathComponent
+                subtitleSelection = "external"
+                onRestoreExternalSubtitles?(url)
+            } else {
+                subtitleStatusMessage = "The saved subtitle file is unavailable. Choose it again."
+            }
+        default: break
+        }
+    }
+
+    private func saveMemory() {
+        guard !restoringMemory, !isDiscovering, didDiscoverTracks, let sourceURL else { return }
+        let subtitle = subtitleTracks.first(where: { $0.id == subtitleSelection })
+        let memory = MediaFileMemory(
+            audioOption: Self.optionData(audioTracks.first(where: { $0.id == audioSelection })?.option),
+            subtitleMode: subtitle != nil ? "track" : subtitleSelection,
+            subtitleOption: Self.optionData(subtitle?.option), externalSubtitle: externalReference,
+            subtitleDelay: subtitleDelay)
+        preferences?.saveMediaMemory(memory, for: sourceURL)
+    }
+
+    func useExternalSubtitles(named name: String, reference: SubtitleFileReference? = nil, activate: Bool = true) {
         externalSubtitleName = name
+        externalReference = reference
+        subtitleStatusMessage = ""
         if activate { subtitleSelection = "external" }
+        saveMemory()
+    }
+
+    func externalSubtitlesUnavailable() {
+        subtitleStatusMessage = "The subtitle file could not be loaded. Choose a readable subtitle file."
     }
 
     func tick(time: Double, duration: Double) {
+        renderEmbeddedText(at: time)
         if let resume = pendingResume, duration > 0 {
             pendingResume = nil
             if resume >= 5, resume < duration - 5 { onSeek?(resume) }
@@ -218,12 +310,14 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
     }
 
     func savePosition() {
+        saveMemory()
         guard let sourceURL, let player else { return }
         preferences?.savePosition(player.currentTime().seconds, duration: player.currentItem?.duration.seconds ?? 0, for: sourceURL)
     }
 
     func detach() {
         savePosition()
+        restoringMemory = true
         identifier = UUID()
         discoveryTask?.cancel()
         discoveryTask = nil
@@ -238,27 +332,43 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
         lastSavedTime = 0
         subtitleGroup = nil
         audioGroup = nil
+        pendingMemory = nil
+        didDiscoverTracks = false
+        externalReference = nil
+        subtitleDelay = 0
+        subtitleStatusMessage = ""
         subtitleSelection = preferences?.subtitlesByDefault == false ? "off" : "automatic"
         audioSelection = "automatic"
         subtitleTracks = []
         audioTracks = []
         chapters = []
         streams = []
+        captionTimeline.reset()
         embeddedText = ""
         externalSubtitleName = ""
         informationError = ""
         isDiscovering = false
+        restoringMemory = false
     }
 
     nonisolated func legibleOutput(_ output: AVPlayerItemLegibleOutput, didOutputAttributedStrings strings: [NSAttributedString], nativeSampleBuffers: [Any], forItemTime itemTime: CMTime) {
         MainActor.assumeIsolated {
             guard output === legibleOutput, subtitleSelection != "off", subtitleSelection != "external" else { return }
-            embeddedText = strings.map(\.string).joined(separator: "\n")
+            captionTimeline.insert(time: itemTime.seconds, text: strings.map(\.string).joined(separator: "\n"))
+            renderEmbeddedText(at: player?.currentTime().seconds ?? 0)
         }
     }
 
     nonisolated func outputSequenceWasFlushed(_ output: AVPlayerItemOutput) {
-        MainActor.assumeIsolated { if output === legibleOutput { embeddedText = "" } }
+        MainActor.assumeIsolated {
+            if output === legibleOutput { captionTimeline.reset(); embeddedText = "" }
+        }
+    }
+
+    private func renderEmbeddedText(at time: Double) {
+        guard subtitleSelection != "off", subtitleSelection != "external" else { return }
+        let text = captionTimeline.text(at: time - subtitleDelay)
+        if embeddedText != text { embeddedText = text }
     }
 
     nonisolated private static func fourCC(_ value: FourCharCode) -> String {

@@ -23,6 +23,7 @@ final class PlayerMenuState: ObservableObject {
         var isMuted = false
         var subtitleSelection = "automatic"
         var audioSelection = "automatic"
+        var subtitleDelay: Double = 0
         var subtitleTracks: [Choice] = []
         var audioTracks: [Choice] = []
         var chapters: [Chapter] = []
@@ -66,6 +67,7 @@ final class PlayerMenuState: ObservableObject {
             isMuted: model.isMuted,
             subtitleSelection: media.subtitleSelection,
             audioSelection: media.audioSelection,
+            subtitleDelay: media.subtitleDelay,
             subtitleTracks: media.subtitleTracks.map { Choice(id: $0.id, name: $0.name) },
             audioTracks: media.audioTracks.map { Choice(id: $0.id, name: $0.name) },
             chapters: media.chapters.map { Chapter(id: $0.id, title: $0.title, start: $0.start) },

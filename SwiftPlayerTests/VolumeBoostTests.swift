@@ -102,10 +102,11 @@ final class VolumeBoostTests: DebugMatrixTestCase {
         XCTAssertFalse(model.isMuted)
     }
 
-    private func measuredPeak(gain: Float, amplitude: Float, channels: AVAudioChannelCount) async throws -> Float {
+    private func renderedSamples(gain: Float, amplitude: Float, channels: AVAudioChannelCount,
+                                 limiter: Bool = true, normalization: Bool = false, seconds: Double = 0.1) async throws -> [Float] {
         let source = directory.appendingPathComponent(UUID().uuidString + ".wav")
         let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: channels))
-        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4800))
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(seconds * 48000)))
         buffer.frameLength = buffer.frameCapacity
         for channel in 0..<Int(channels) {
             let samples = try XCTUnwrap(buffer.floatChannelData?[channel])
@@ -117,6 +118,7 @@ final class VolumeBoostTests: DebugMatrixTestCase {
         let asset = AVURLAsset(url: source)
         var processor: AudioGainController? = AudioGainController()
         processor?.setVolume(gain)
+        processor?.configure(limiter: limiter, normalization: normalization)
         let mix = try await processor?.makeMix(for: asset)
         // Taps must own the render state independently of the Swift controller.
         weak var weakProcessor = processor
@@ -130,7 +132,7 @@ final class VolumeBoostTests: DebugMatrixTestCase {
         output.audioMix = mix
         reader.add(output)
         XCTAssertTrue(reader.startReading())
-        var peak: Float = 0
+        var rendered: [Float] = []
         var sampleCount = 0
         while let sample = output.copyNextSampleBuffer() {
             let block = try XCTUnwrap(CMSampleBufferGetDataBuffer(sample))
@@ -140,13 +142,17 @@ final class VolumeBoostTests: DebugMatrixTestCase {
                 totalLengthOut: &length, dataPointerOut: &bytes), kCMBlockBufferNoErr)
             let data = try XCTUnwrap(bytes)
             data.withMemoryRebound(to: Float.self, capacity: length / 4) { values in
-                for i in 0..<(length / 4) { peak = max(peak, abs(values[i])) }
+                rendered.append(contentsOf: UnsafeBufferPointer(start: values, count: length / 4))
             }
             sampleCount += length / 4
         }
         XCTAssertEqual(reader.status, .completed)
         XCTAssertGreaterThan(sampleCount, 0)
-        return peak
+        return rendered
+    }
+
+    private func measuredPeak(gain: Float, amplitude: Float, channels: AVAudioChannelCount) async throws -> Float {
+        try await renderedSamples(gain: gain, amplitude: amplitude, channels: channels).map(abs).max() ?? 0
     }
 
     func testNativeAudioMixActuallyAmplifiesMonoAndStereoSamplesAndLimitsPeaks() async throws {
@@ -156,7 +162,50 @@ final class VolumeBoostTests: DebugMatrixTestCase {
                 XCTAssertEqual(peak, 0.1 * gain, accuracy: 0.002)
             }
             let limited = try await measuredPeak(gain: 4, amplitude: 0.8, channels: channels)
-            XCTAssertEqual(limited, 1, accuracy: 0.002)
+            XCTAssertEqual(limited, 0.98, accuracy: 0.002)
         }
     }
+    func testLimiterAvoidsClippedPlateausAndCanBeDisabled() async throws {
+        let protected = try await renderedSamples(gain: 4, amplitude: 0.8, channels: 2)
+        let unprotected = try await renderedSamples(gain: 4, amplitude: 0.8, channels: 2, limiter: false)
+        XCTAssertLessThanOrEqual(protected.map(abs).max() ?? 0, 0.981)
+        XCTAssertFalse(protected.contains { abs($0) >= 0.999 })
+        XCTAssertTrue(unprotected.contains { abs($0) >= 0.999 })
+        // Block-wide stereo linking must preserve equal channels.
+        for frame in 0..<(protected.count / 2) { XCTAssertEqual(protected[frame * 2], protected[frame * 2 + 1]) }
+    }
+
+    func testNormalizationBalancesLevelsAndDoesNotBoostNoiseOrSilence() async throws {
+        func rms(_ samples: [Float]) -> Double {
+            let tail = samples.suffix(48000)
+            return sqrt(tail.reduce(0.0) { $0 + Double($1) * Double($1) } / Double(tail.count))
+        }
+        let quiet = try await renderedSamples(gain: 1, amplitude: 0.05, channels: 1, normalization: true, seconds: 5)
+        let loud = try await renderedSamples(gain: 1, amplitude: 0.8, channels: 1, normalization: true, seconds: 5)
+        XCTAssertEqual(rms(quiet), 0.14, accuracy: 0.01)
+        XCTAssertEqual(rms(loud), 0.14, accuracy: 0.01)
+        let noise = try await renderedSamples(gain: 1, amplitude: 0.001, channels: 1, normalization: true)
+        XCTAssertLessThanOrEqual(noise.map(abs).max() ?? 0, 0.00101)
+        let silence = try await renderedSamples(gain: 4, amplitude: 0, channels: 2, normalization: true)
+        XCTAssertTrue(silence.allSatisfy { $0 == 0 })
+    }
+
+    func testAudioProcessingPreferencesPersistAndUpdateWithoutReplacingMedia() async throws {
+        let (settings, defaults, name) = try preferences()
+        defer { defaults.removePersistentDomain(forName: name) }
+        XCTAssertTrue(settings.limitAudioPeaks)
+        XCTAssertFalse(settings.normalizeAudio)
+        let model = PlayerModel(preferences: settings)
+        defer { model.teardown() }
+        try await ready(model)
+        let item = try XCTUnwrap(model.player.currentItem)
+        settings.limitAudioPeaks = false
+        settings.normalizeAudio = true
+        XCTAssertTrue(model.player.currentItem === item)
+        XCTAssertEqual(model.player.rate, 0)
+        let restored = PlayerPreferences(defaults: defaults)
+        XCTAssertFalse(restored.limitAudioPeaks)
+        XCTAssertTrue(restored.normalizeAudio)
+    }
+
 }

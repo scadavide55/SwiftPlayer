@@ -33,7 +33,17 @@ final class PlayerPreferences: ObservableObject {
             defaults.set(maximumVolume, forKey: "maximumVolume")
         }
     }
+    @Published var limitAudioPeaks: Bool { didSet { defaults.set(limitAudioPeaks, forKey: "limitAudioPeaks") } }
+    @Published var normalizeAudio: Bool { didSet { defaults.set(normalizeAudio, forKey: "normalizeAudio") } }
     @Published var rememberVolume: Bool { didSet { defaults.set(rememberVolume, forKey: "rememberVolume") } }
+    @Published var autoFindSubtitles: Bool { didSet { defaults.set(autoFindSubtitles, forKey: "autoFindSubtitles") } }
+    @Published var rememberFileSettings: Bool {
+        didSet {
+            defaults.set(rememberFileSettings, forKey: "rememberFileSettings")
+            if !rememberFileSettings { defaults.removeObject(forKey: "mediaFileSettings") }
+        }
+    }
+    @Published var afterPlayback: EndOfPlaybackAction { didSet { defaults.set(afterPlayback.rawValue, forKey: "afterPlayback") } }
     @Published var resumePlayback: Bool {
         didSet {
             defaults.set(resumePlayback, forKey: "resumePlayback")
@@ -62,9 +72,38 @@ final class PlayerPreferences: ObservableObject {
         subtitlesByDefault = defaults.object(forKey: "subtitlesByDefault") as? Bool ?? true
         let savedMaximum = defaults.object(forKey: "maximumVolume") as? Float ?? 2
         maximumVolume = savedMaximum.isFinite ? min(max(savedMaximum, 1), 4) : 2
+        limitAudioPeaks = defaults.object(forKey: "limitAudioPeaks") as? Bool ?? true
+        normalizeAudio = defaults.object(forKey: "normalizeAudio") as? Bool ?? false
         rememberVolume = defaults.object(forKey: "rememberVolume") as? Bool ?? true
+        autoFindSubtitles = defaults.object(forKey: "autoFindSubtitles") as? Bool ?? true
+        rememberFileSettings = defaults.object(forKey: "rememberFileSettings") as? Bool ?? true
+        afterPlayback = EndOfPlaybackAction(rawValue: defaults.string(forKey: "afterPlayback") ?? "") ?? .stay
         resumePlayback = defaults.object(forKey: "resumePlayback") as? Bool ?? false
         appearance = (defaults.data(forKey: "subtitleAppearance").flatMap { try? JSONDecoder().decode(SubtitleAppearance.self, from: $0) } ?? SubtitleAppearance()).normalized
+    }
+
+    private func fileSettings() -> [String: StoredMediaFileMemory] {
+        guard let data = defaults.data(forKey: "mediaFileSettings"), data.count <= 8 * 1024 * 1024,
+              let values = try? JSONDecoder().decode([String: StoredMediaFileMemory].self, from: data) else { return [:] }
+        return values
+    }
+
+    func mediaMemory(for url: URL) -> MediaFileMemory? {
+        guard rememberFileSettings else { return nil }
+        return fileSettings()[url.standardizedFileURL.absoluteString]?.settings.normalized
+    }
+
+    func saveMediaMemory(_ settings: MediaFileMemory, for url: URL) {
+        guard rememberFileSettings else { return }
+        let key = url.standardizedFileURL.absoluteString
+        let normalized = settings.normalized
+        var values = fileSettings()
+        if values[key]?.settings == normalized { return }
+        values[key] = StoredMediaFileMemory(settings: normalized, updated: Date())
+        for old in values.sorted(by: { $0.value.updated < $1.value.updated }).prefix(max(0, values.count - 100)) {
+            values.removeValue(forKey: old.key)
+        }
+        defaults.set(try? JSONEncoder().encode(values), forKey: "mediaFileSettings")
     }
 
     func resumeTime(for url: URL) -> Double? {

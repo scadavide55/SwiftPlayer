@@ -90,11 +90,20 @@ struct PlayerPreferencesView: View {
                         Text("\(Int((preferences.maximumVolume * 100).rounded()))%")
                             .monospacedDigit().frame(width: 44, alignment: .trailing)
                     }
+                    Toggle("Protect boosted audio peaks", isOn: $preferences.limitAudioPeaks)
+                    Toggle("Normalize audio level", isOn: $preferences.normalizeAudio)
+                    Text("Normalization balances quiet and loud passages. Peak protection reduces distortion when boosting volume.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Toggle("Remember tracks and subtitle timing for each file", isOn: $preferences.rememberFileSettings)
                     Toggle("Remember volume and mute", isOn: $preferences.rememberVolume)
+                    Picker("After playback", selection: $preferences.afterPlayback) {
+                        ForEach(EndOfPlaybackAction.allCases) { Text($0.title).tag($0) }
+                    }
                     Toggle("Resume files from the last position", isOn: $preferences.resumePlayback)
                     Text("Turning resume off clears saved playback positions.").font(.caption).foregroundStyle(.secondary)
                 }
             }.formStyle(.grouped).tabItem { Label("General", systemImage: "gearshape") }
+            SubtitleSearchSettingsView(preferences: preferences).tabItem { Label("Subtitle Files", systemImage: "folder") }
             SubtitleAppearanceView(preferences: preferences).tabItem { Label("Subtitle Appearance", systemImage: "textformat") }
         }.padding(12).frame(width: 510, height: 490)
     }
