@@ -170,101 +170,107 @@ nonisolated enum PGSSubtitleParser {
         var previousPTS: UInt64 = 0, wraps: UInt64 = 0
         var pending = false
         while true {
-            try Task.checkCancellation()
-            let header = try file.read(upToCount: 13) ?? Data()
-            if header.isEmpty { break }
-            guard header.count == 13 else { throw SubtitleDecodingError.invalid }
-            var h = SubtitleBytes(header)
-            guard try h.uint(2) == 0x5047 else { throw SubtitleDecodingError.invalid }
-            let pts = UInt64(try h.uint(4))
-            _ = try h.uint(4)
-            let type = try h.byte(), length = try h.uint(2)
-            inputBytes += 13 + length; packets += 1
-            guard inputBytes <= 128 * 1024 * 1024, packets <= 200_000 else { throw SubtitleDecodingError.limit }
-            let payload = try file.read(upToCount: length) ?? Data()
-            guard payload.count == length else { throw SubtitleDecodingError.invalid }
-            var r = SubtitleBytes(payload)
-            switch type {
-            case 0x16:
-                guard !pending else { throw SubtitleDecodingError.invalid }
-                let w = try r.uint(2), height = try r.uint(2)
-                guard w > 0, height > 0, w <= 8192, height <= 8192 else { throw SubtitleDecodingError.invalid }
-                canvas = CGSize(width: w, height: height)
-                _ = try r.byte(); _ = try r.uint(2)
-                let state = try r.byte()
-                if state & 0xc0 != 0 { objects.removeAll(); palettes.removeAll(); windows.removeAll() }
-                _ = try r.byte(); paletteID = Int(try r.byte())
-                let count = try r.byte()
-                guard count <= 2 else { throw SubtitleDecodingError.invalid }
-                placements = []
-                for _ in 0..<count {
-                    let id = try r.uint(2)
-                    let windowID = Int(try r.byte())
-                    let flags = try r.byte(), x = try r.uint(2), y = try r.uint(2)
-                    var crop: CGRect?
-                    if flags & 0x80 != 0 { crop = CGRect(x: try r.uint(2), y: try r.uint(2), width: try r.uint(2), height: try r.uint(2)) }
-                    placements.append(Placement(id: id, x: x, y: y, crop: crop, windowID: windowID))
+            // FileHandle reads can leave autoreleased buffers alive for the whole
+            // background task. Drain each segment while retaining parsed objects.
+            let hasSegment = try autoreleasepool {
+                try Task.checkCancellation()
+                let header = try file.read(upToCount: 13) ?? Data()
+                if header.isEmpty { return false }
+                guard header.count == 13 else { throw SubtitleDecodingError.invalid }
+                var h = SubtitleBytes(header)
+                guard try h.uint(2) == 0x5047 else { throw SubtitleDecodingError.invalid }
+                let pts = UInt64(try h.uint(4))
+                _ = try h.uint(4)
+                let type = try h.byte(), length = try h.uint(2)
+                inputBytes += 13 + length; packets += 1
+                guard inputBytes <= 128 * 1024 * 1024, packets <= 200_000 else { throw SubtitleDecodingError.limit }
+                let payload = try file.read(upToCount: length) ?? Data()
+                guard payload.count == length else { throw SubtitleDecodingError.invalid }
+                var r = SubtitleBytes(payload)
+                switch type {
+                case 0x16:
+                    guard !pending else { throw SubtitleDecodingError.invalid }
+                    let w = try r.uint(2), height = try r.uint(2)
+                    guard w > 0, height > 0, w <= 8192, height <= 8192 else { throw SubtitleDecodingError.invalid }
+                    canvas = CGSize(width: w, height: height)
+                    _ = try r.byte(); _ = try r.uint(2)
+                    let state = try r.byte()
+                    if state & 0xc0 != 0 { objects.removeAll(); palettes.removeAll(); windows.removeAll() }
+                    _ = try r.byte(); paletteID = Int(try r.byte())
+                    let count = try r.byte()
+                    guard count <= 2 else { throw SubtitleDecodingError.invalid }
+                    placements = []
+                    for _ in 0..<count {
+                        let id = try r.uint(2)
+                        let windowID = Int(try r.byte())
+                        let flags = try r.byte(), x = try r.uint(2), y = try r.uint(2)
+                        var crop: CGRect?
+                        if flags & 0x80 != 0 { crop = CGRect(x: try r.uint(2), y: try r.uint(2), width: try r.uint(2), height: try r.uint(2)) }
+                        placements.append(Placement(id: id, x: x, y: y, crop: crop, windowID: windowID))
+                    }
+                    if pts < previousPTS, previousPTS - pts > 0x80000000 { wraps += 1 }
+                    previousPTS = pts
+                    let nextTime = Double(pts + wraps * 0x100000000) / 90_000
+                    guard nextTime >= time else { throw SubtitleDecodingError.invalid }
+                    time = nextTime
+                    pending = true
+                case 0x14:
+                    let id = Int(try r.byte()); _ = try r.byte()
+                    var colors = palettes[id] ?? [UInt8](repeating: 0, count: 1024)
+                    while r.remaining > 0 {
+                        let i = Int(try r.byte()) * 4
+                        let y = Double(try r.byte()) - 16, cr = Double(try r.byte()) - 128, cb = Double(try r.byte()) - 128
+                        let sd = canvas.height > 0 && canvas.height <= 576
+                        colors[i] = UInt8(min(max((1.164 * y + (sd ? 1.596 : 1.793) * cr).rounded(), 0), 255))
+                        colors[i + 1] = UInt8(min(max((1.164 * y - (sd ? 0.392 : 0.213) * cb - (sd ? 0.813 : 0.533) * cr).rounded(), 0), 255))
+                        colors[i + 2] = UInt8(min(max((1.164 * y + (sd ? 2.017 : 2.112) * cb).rounded(), 0), 255))
+                        colors[i + 3] = try r.byte()
+                    }
+                    palettes[id] = colors
+                    guard palettes.count <= 8 else { throw SubtitleDecodingError.limit }
+                case 0x15:
+                    let id = try r.uint(2); _ = try r.byte()
+                    let flags = try r.byte()
+                    if flags & 0x80 != 0 {
+                        let expected = try r.uint(3) - 4, w = try r.uint(2), height = try r.uint(2)
+                        guard expected > 0, expected <= 8 * 1024 * 1024, w > 0, height > 0,
+                              w <= 8192, height <= 8192, w * height <= 8 * 1024 * 1024 else { throw SubtitleDecodingError.limit }
+                        objects[id] = Object(width: w, height: height, expected: expected, bytes: Data())
+                    }
+                    guard var object = objects[id], r.remaining <= object.expected - object.bytes.count else { throw SubtitleDecodingError.invalid }
+                    object.bytes.append(try r.take(r.remaining))
+                    if flags & 0x40 != 0, object.bytes.count != object.expected { throw SubtitleDecodingError.invalid }
+                    objects[id] = object
+                    guard objects.count <= 64, objects.values.reduce(0, { $0 + $1.bytes.count }) <= 16 * 1024 * 1024 else { throw SubtitleDecodingError.limit }
+                case 0x80:
+                    guard pending else { throw SubtitleDecodingError.invalid }
+                    pending = false
+                    if cues.last?.end == .infinity { cues[cues.count - 1].end = time }
+                    if placements.isEmpty { return true }
+                    guard let palette = palettes[paletteID] else { throw SubtitleDecodingError.invalid }
+                    var parts: [BitmapSubtitle.Part] = []
+                    for p in placements {
+                        guard let o = objects[p.id], o.bytes.count == o.expected,
+                              p.x < Int(canvas.width), p.y < Int(canvas.height) else { throw SubtitleDecodingError.invalid }
+                        retainedBytes += o.bytes.count + palette.count
+                        parts.append(.init(bounds: CGRect(x: p.x, y: p.y, width: o.width, height: o.height),
+                            width: o.width, height: o.height, bytes: o.bytes, palette: palette, crop: p.crop, window: windows[p.windowID]))
+                    }
+                    guard retainedBytes <= 64 * 1024 * 1024, cues.count < 30_000 else { throw SubtitleDecodingError.limit }
+                    cues.append(SubtitleCue(start: time, end: .infinity, text: "", bitmap: BitmapSubtitle(canvas: canvas, parts: parts)))
+                case 0x17:
+                    let count = try r.byte()
+                    guard count <= 2 else { throw SubtitleDecodingError.invalid }
+                    for _ in 0..<count {
+                        let id = Int(try r.byte())
+                        windows[id] = CGRect(x: try r.uint(2), y: try r.uint(2), width: try r.uint(2), height: try r.uint(2))
+                    }
+                    guard windows.count <= 2 else { throw SubtitleDecodingError.limit }
+                default: throw SubtitleDecodingError.invalid
                 }
-                if pts < previousPTS, previousPTS - pts > 0x80000000 { wraps += 1 }
-                previousPTS = pts
-                let nextTime = Double(pts + wraps * 0x100000000) / 90_000
-                guard nextTime >= time else { throw SubtitleDecodingError.invalid }
-                time = nextTime
-                pending = true
-            case 0x14:
-                let id = Int(try r.byte()); _ = try r.byte()
-                var colors = palettes[id] ?? [UInt8](repeating: 0, count: 1024)
-                while r.remaining > 0 {
-                    let i = Int(try r.byte()) * 4
-                    let y = Double(try r.byte()) - 16, cr = Double(try r.byte()) - 128, cb = Double(try r.byte()) - 128
-                    let sd = canvas.height > 0 && canvas.height <= 576
-                    colors[i] = UInt8(min(max((1.164 * y + (sd ? 1.596 : 1.793) * cr).rounded(), 0), 255))
-                    colors[i + 1] = UInt8(min(max((1.164 * y - (sd ? 0.392 : 0.213) * cb - (sd ? 0.813 : 0.533) * cr).rounded(), 0), 255))
-                    colors[i + 2] = UInt8(min(max((1.164 * y + (sd ? 2.017 : 2.112) * cb).rounded(), 0), 255))
-                    colors[i + 3] = try r.byte()
-                }
-                palettes[id] = colors
-                guard palettes.count <= 8 else { throw SubtitleDecodingError.limit }
-            case 0x15:
-                let id = try r.uint(2); _ = try r.byte()
-                let flags = try r.byte()
-                if flags & 0x80 != 0 {
-                    let expected = try r.uint(3) - 4, w = try r.uint(2), height = try r.uint(2)
-                    guard expected > 0, expected <= 8 * 1024 * 1024, w > 0, height > 0,
-                          w <= 8192, height <= 8192, w * height <= 8 * 1024 * 1024 else { throw SubtitleDecodingError.limit }
-                    objects[id] = Object(width: w, height: height, expected: expected, bytes: Data())
-                }
-                guard var object = objects[id], r.remaining <= object.expected - object.bytes.count else { throw SubtitleDecodingError.invalid }
-                object.bytes.append(try r.take(r.remaining))
-                if flags & 0x40 != 0, object.bytes.count != object.expected { throw SubtitleDecodingError.invalid }
-                objects[id] = object
-                guard objects.count <= 64, objects.values.reduce(0, { $0 + $1.bytes.count }) <= 16 * 1024 * 1024 else { throw SubtitleDecodingError.limit }
-            case 0x80:
-                guard pending else { throw SubtitleDecodingError.invalid }
-                pending = false
-                if cues.last?.end == .infinity { cues[cues.count - 1].end = time }
-                if placements.isEmpty { continue }
-                guard let palette = palettes[paletteID] else { throw SubtitleDecodingError.invalid }
-                var parts: [BitmapSubtitle.Part] = []
-                for p in placements {
-                    guard let o = objects[p.id], o.bytes.count == o.expected,
-                          p.x < Int(canvas.width), p.y < Int(canvas.height) else { throw SubtitleDecodingError.invalid }
-                    retainedBytes += o.bytes.count + palette.count
-                    parts.append(.init(bounds: CGRect(x: p.x, y: p.y, width: o.width, height: o.height),
-                        width: o.width, height: o.height, bytes: o.bytes, palette: palette, crop: p.crop, window: windows[p.windowID]))
-                }
-                guard retainedBytes <= 64 * 1024 * 1024, cues.count < 30_000 else { throw SubtitleDecodingError.limit }
-                cues.append(SubtitleCue(start: time, end: .infinity, text: "", bitmap: BitmapSubtitle(canvas: canvas, parts: parts)))
-            case 0x17:
-                let count = try r.byte()
-                guard count <= 2 else { throw SubtitleDecodingError.invalid }
-                for _ in 0..<count {
-                    let id = Int(try r.byte())
-                    windows[id] = CGRect(x: try r.uint(2), y: try r.uint(2), width: try r.uint(2), height: try r.uint(2))
-                }
-                guard windows.count <= 2 else { throw SubtitleDecodingError.limit }
-            default: throw SubtitleDecodingError.invalid
+                return true
             }
+            if !hasSegment { break }
         }
         guard !pending else { throw SubtitleDecodingError.invalid }
         return cues
