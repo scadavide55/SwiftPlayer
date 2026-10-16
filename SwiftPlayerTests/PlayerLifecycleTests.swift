@@ -498,11 +498,24 @@ final class PlayerLifecycleTests: XCTestCase {
         try await waitUntil { model.isFastSeeking }
         model.player.play()
         XCTAssertFalse(model.isFastSeeking)
-        try await waitUntil { model.isPlaying }
+        // The last reverse seek may still be completing when native Play
+        // cancels the hold. Sample progress after that seek and startup settle.
+        try await waitUntil { !model.isSeeking && model.player.timeControlStatus == .playing }
         let time = model.player.currentTime().seconds
-        try await Task.sleep(for: .milliseconds(350))
-        XCTAssertGreaterThan(model.player.currentTime().seconds, time + 0.1)
+        var previous = time
+        for _ in 0..<7 {
+            try await Task.sleep(for: .milliseconds(50))
+            let current = model.player.currentTime().seconds
+            XCTAssertGreaterThanOrEqual(current, previous - 0.01,
+                "A canceled reverse hold must not keep moving the timeline backwards.")
+            XCTAssertFalse(model.isFastSeeking)
+            previous = current
+        }
+        // Native audio startup can temporarily advance less than wall time.
+        // Verify resumed progress without imposing a throughput benchmark.
+        try await waitUntil { model.player.currentTime().seconds > time + 0.1 }
         XCTAssertTrue(model.playbackRequested)
+        XCTAssertEqual(model.player.rate, model.playbackRate)
     }
 
     func testNativePauseBeforeHoldThresholdCancelsDelayedSeeking() async throws {
