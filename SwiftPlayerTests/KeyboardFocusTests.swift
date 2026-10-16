@@ -4,7 +4,7 @@ import AppKit
 
 @MainActor
 final class KeyboardFocusTests: XCTestCase {
-    func testDoublePressSelectsShuttleWithoutChangingSingleHoldsShiftOrNativeRepeat() throws {
+    func testRapidUnmodifiedPressesRemainJumpsAndShiftSelectsShuttle() throws {
         let view = KeyEventHandlingView.KeyCatcherView()
         defer { KeyEventHandlingView.dismantleNSView(view, coordinator: ()) }
         var modes: [ArrowSeekMode] = []
@@ -22,28 +22,29 @@ final class KeyboardFocusTests: XCTestCase {
             try send(code, start + 0.7, repeatKey: true)
             try send(code, start + 0.8, up: true)
         }
-        XCTAssertEqual(modes, [.jump, .shuttle, .jump, .shuttle])
+        XCTAssertEqual(modes, [.jump, .jump, .jump, .jump])
         try send(124, 6)
         try send(124, 6.05, up: true)
         try send(124, 6.1, flags: .shift)
-        XCTAssertEqual(modes.suffix(2), [.jump, .largeJump])
+        XCTAssertEqual(modes.suffix(2), [.jump, .shuttle])
         try send(124, 6.2, up: true)
         try send(124, 8)
-        XCTAssertEqual(modes.last, .jump, "An old tap must not activate shuttle playback.")
+        XCTAssertEqual(modes.last, .jump, "Unmodified presses must not activate shuttle playback.")
     }
 
-    func testShiftRoutesSixTimesTheNormalJump() throws {
+    func testShiftRoutesFastPlaybackAndNormalArrowsRemainJumps() throws {
         let view = KeyEventHandlingView.KeyCatcherView()
         defer { KeyEventHandlingView.dismantleNSView(view, coordinator: ()) }
-        var jumps: [Int] = []
-        view.onArrowDown = { direction, mode in jumps.append(direction * (mode == .largeJump ? 30 : 5)) }
+        var directions: [Int] = [], modes: [ArrowSeekMode] = []
+        view.onArrowDown = { direction, mode in directions.append(direction); modes.append(mode) }
         for (code, flags): (UInt16, NSEvent.ModifierFlags) in [(123, []), (124, []), (123, .shift), (124, .shift)] {
             let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags,
                 timestamp: 0, windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "",
                 isARepeat: false, keyCode: code))
             view.keyDown(with: event)
         }
-        XCTAssertEqual(jumps, [-5, 5, -30, 30])
+        XCTAssertEqual(directions, [-1, 1, -1, 1])
+        XCTAssertEqual(modes, [.jump, .jump, .shuttle, .shuttle])
     }
 
     private func event(_ code: UInt16, window: NSWindow, up: Bool = false) throws -> NSEvent {

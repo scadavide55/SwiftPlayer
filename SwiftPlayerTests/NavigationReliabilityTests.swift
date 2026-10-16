@@ -78,41 +78,39 @@ final class NavigationReliabilityTests: DebugMatrixTestCase {
         }
     }
 
-    func testNormalAndShiftConsecutiveTapsAndHoldsWhilePlayingAndPausedWhenProvided() async throws {
-        for largeJump in [false, true] {
-            let length = largeJump ? 30.0 : 5.0
-            for playing in [false, true] {
-                let model = try await localPlayer(playing: playing)
-                defer { model.teardown() }
-                for direction in [1, -1] {
-                    let start = model.player.currentTime().seconds
-                    for _ in 0..<10 {
-                        model.beginFastSeeking(direction: direction, mode: largeJump ? .largeJump : .jump)
-                        model.endFastSeeking()
-                    }
-                    try await waitUntilCondition { !model.isSeeking }
-                    XCTAssertEqual(model.player.currentTime().seconds, start + Double(direction) * length * 10, accuracy: 0.5)
-                    let beforeHold = model.player.currentTime().seconds
-                    model.beginFastSeeking(direction: direction, mode: largeJump ? .largeJump : .jump)
-                    // Native key-repeat events must neither restart the delay nor
-                    // introduce extra jumps alongside the player's repeat timer.
-                    for _ in 0..<10 {
-                        try await Task.sleep(for: .milliseconds(100))
-                        model.beginFastSeeking(direction: direction, mode: largeJump ? .largeJump : .jump)
-                    }
+    func testNormalConsecutiveTapsAndHoldsWhilePlayingAndPausedWhenProvided() async throws {
+        let length = 5.0
+        for playing in [false, true] {
+            let model = try await localPlayer(playing: playing)
+            defer { model.teardown() }
+            for direction in [1, -1] {
+                let start = model.player.currentTime().seconds
+                for _ in 0..<10 {
+                    model.beginFastSeeking(direction: direction, mode: .jump)
                     model.endFastSeeking()
-                    try await waitUntilCondition { !model.isSeeking }
-                    let progress = (model.player.currentTime().seconds - beforeHold) * Double(direction)
-                    XCTAssertGreaterThan(progress, length * 4.5)
-                    XCTAssertLessThan(progress, length * 8.2)
-                    XCTAssertEqual(model.playbackRequested, playing)
-                    XCTAssertEqual(model.player.rate, playing ? model.playbackRate : 0)
-                    var display = CMTime.invalid
-                    try await waitUntilCondition {
-                        self.output?.copyPixelBuffer(forItemTime: model.player.currentTime(), itemTimeForDisplay: &display) != nil
-                    }
-                    XCTAssertEqual(display.seconds, model.player.currentTime().seconds, accuracy: 0.5)
                 }
+                try await waitUntilCondition { !model.isSeeking }
+                XCTAssertEqual(model.player.currentTime().seconds, start + Double(direction) * length * 10, accuracy: 0.5)
+                let beforeHold = model.player.currentTime().seconds
+                model.beginFastSeeking(direction: direction, mode: .jump)
+                // Native key-repeat events must neither restart the delay nor
+                // introduce extra jumps alongside the player's repeat timer.
+                for _ in 0..<10 {
+                    try await Task.sleep(for: .milliseconds(100))
+                    model.beginFastSeeking(direction: direction, mode: .jump)
+                }
+                model.endFastSeeking()
+                try await waitUntilCondition { !model.isSeeking }
+                let progress = (model.player.currentTime().seconds - beforeHold) * Double(direction)
+                XCTAssertGreaterThan(progress, length * 4.5)
+                XCTAssertLessThan(progress, length * 8.2)
+                XCTAssertEqual(model.playbackRequested, playing)
+                XCTAssertEqual(model.player.rate, playing ? model.playbackRate : 0)
+                var display = CMTime.invalid
+                try await waitUntilCondition {
+                    self.output?.copyPixelBuffer(forItemTime: model.player.currentTime(), itemTimeForDisplay: &display) != nil
+                }
+                XCTAssertEqual(display.seconds, model.player.currentTime().seconds, accuracy: 0.5)
             }
         }
     }
@@ -152,7 +150,7 @@ final class NavigationReliabilityTests: DebugMatrixTestCase {
         XCTAssertNotNil(model.player.currentItem)
     }
 
-    func testDoublePressHoldsUseNativeFastForwardAndReverseAndRestoreStateWhenProvided() async throws {
+    func testShiftHoldsUseNativeFastForwardAndReverseAndRestoreStateWhenProvided() async throws {
         for playing in [false, true] {
             for direction in [-1, 1] {
                 let model = try await localPlayer(playing: playing)

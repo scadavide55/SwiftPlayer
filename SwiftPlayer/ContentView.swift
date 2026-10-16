@@ -549,9 +549,7 @@ struct KeyEventHandlingView: NSViewRepresentable {
         var onVolumeDown: (() -> Void)?
         var onFrameStep: ((Int) -> Void)?
         private var keyMonitor: Any?
-        private var activeArrow: (code: UInt16, started: TimeInterval, mode: ArrowSeekMode)?
-        private var lastArrowTap: (code: UInt16, released: TimeInterval)?
-        private var hasActiveArrow: Bool { activeArrow != nil }
+        private var hasActiveArrow = false
 
         override var acceptsFirstResponder: Bool { true }
 
@@ -574,13 +572,12 @@ struct KeyEventHandlingView: NSViewRepresentable {
         func invalidateKeyMonitor() {
             if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
             keyMonitor = nil
-            activeArrow = nil
-            lastArrowTap = nil
+            hasActiveArrow = false
         }
 
         override func resignFirstResponder() -> Bool {
             let resigned = super.resignFirstResponder()
-            if resigned { activeArrow = nil; lastArrowTap = nil; onArrowUp?() }
+            if resigned { hasActiveArrow = false; onArrowUp?() }
             return resigned
         }
 
@@ -591,13 +588,7 @@ struct KeyEventHandlingView: NSViewRepresentable {
         private func handlePlaybackKey(_ event: NSEvent) -> Bool {
             if event.type == .keyUp {
                 guard event.keyCode == 123 || event.keyCode == 124 else { return false }
-                if let activeArrow, activeArrow.code == event.keyCode, activeArrow.mode != .largeJump,
-                   (0..<0.5).contains(event.timestamp - activeArrow.started) {
-                    lastArrowTap = (event.keyCode, event.timestamp)
-                } else {
-                    lastArrowTap = nil
-                }
-                activeArrow = nil
+                hasActiveArrow = false
                 onArrowUp?()
                 return true
             }
@@ -614,12 +605,8 @@ struct KeyEventHandlingView: NSViewRepresentable {
                 if !event.isARepeat { onSpace?() }
             case 123, 124: // left/right arrows; the player owns hold timing.
                 guard !event.isARepeat else { return true }
-                let isDoublePress = lastArrowTap.map {
-                    $0.code == event.keyCode && (0...NSEvent.doubleClickInterval).contains(event.timestamp - $0.released)
-                } ?? false
-                let mode: ArrowSeekMode = modifiers.contains(.shift) ? .largeJump : isDoublePress ? .shuttle : .jump
-                activeArrow = (event.keyCode, event.timestamp, mode)
-                lastArrowTap = nil
+                hasActiveArrow = true
+                let mode: ArrowSeekMode = modifiers.contains(.shift) ? .shuttle : .jump
                 onArrowDown?(event.keyCode == 123 ? -1 : 1, mode)
             case 126: // up arrow
                 onVolumeUp?()

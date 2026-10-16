@@ -10,7 +10,7 @@ let supportedExtensions: [String] = [
 ] // audio containers
 
 enum ArrowSeekMode {
-    case jump, largeJump, shuttle
+    case jump, shuttle
 }
 
 @MainActor
@@ -549,7 +549,7 @@ final class PlayerModel: ObservableObject {
               fastSeekDirection != direction else { return }
         endFastSeeking()
         fastSeekDirection = direction
-        let jump = Double(direction) * (mode == .largeJump ? 30 : 5)
+        let jump = Double(direction) * 5
         let clock = ContinuousClock()
         let holdDeadline = clock.now.advanced(by: .milliseconds(500))
         skip(by: jump)
