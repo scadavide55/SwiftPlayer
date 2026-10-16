@@ -111,6 +111,8 @@ The [eight-area debugging refresh](DEBUG_REFRESH_REVIEW_800.md) records its
 800-scenario run and individually verified fixes. The
 [eight-area follow-up](DEBUG_FOLLOWUP_REVIEW_800.md) records the latest fresh
 800-scenario pass, additional regressions, and its sanitized round ledger.
+The [navigation and volume review](NAVIGATION_VOLUME_REVIEW.md) covers reliable
+arrow jumps, held-key timing, forward/reverse shuttle playback, and Mac system volume.
 Supported video resolutions and profiles still depend on the Mac's native decoder.
 Retagging is a compatibility workaround, not a general HEVC conversion: streams
 that depend on new parameter sets carried inside later frames may still fail.
@@ -262,8 +264,7 @@ Tested on: MacBook Air 2020 (Intel Core i3, dual-core) and MacBook Air M5 (2026)
 
 - **Space** – Play/pause
 - **Left/Right Arrow** – Jump back/forward 5 seconds immediately; holding waits 0.5 seconds, then repeats the jump every 0.1 seconds. Release preserves the playing/paused state and selected playback speed.
-- **Shift–Left/Right Arrow** – Use 30-second jumps (six times the normal length), with the same hold timing.
-- **Quick double press, then hold Left/Right** – Tap and release, then press the same arrow again within the Mac's double-click interval and hold. After 0.5 seconds, play backward/forward at 4× speed; release restores the previous playing/paused state and selected speed. Formats without native fast playback support use repeated 5-second jumps instead. Shift always selects 30-second jumps.
+- **Shift–Left/Right Arrow** – Hold for native 4× reverse/forward playback after the 0.5-second delay. The initial press makes the normal 5-second jump. Release restores the previous playing/paused state and selected speed. Formats without native fast playback support use repeated 5-second jumps instead.
 - **Control–Left/Right Arrow** – Pause and step backward/forward one video frame
 - **Up/Down Arrow** – Adjust Mac system volume by 5 percentage points (0–100%)
 - **Option–Left/Right Arrow** – Display subtitles 0.1 seconds earlier/later
