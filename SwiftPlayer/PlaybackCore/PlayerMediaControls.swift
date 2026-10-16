@@ -59,7 +59,7 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
     }
     @Published private(set) var subtitleStatusMessage = ""
     var onSubtitleDelayChanged: ((Double) -> Void)?
-    var onRestoreExternalSubtitles: ((URL) -> Void)?
+    var onRestoreExternalSubtitles: ((URL, URL?, Int?) -> Void)?
     private var captionTimeline = CaptionTimeline()
     private var externalReference: SubtitleFileReference?
     private var pendingMemory: MediaFileMemory?
@@ -273,7 +273,7 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
                 externalReference = memory.externalSubtitle
                 externalSubtitleName = url.lastPathComponent
                 subtitleSelection = "external"
-                onRestoreExternalSubtitles?(url)
+                onRestoreExternalSubtitles?(url, memory.externalSubtitle?.resolveCompanion(), memory.externalSubtitle?.subtitleTrack)
             } else {
                 subtitleStatusMessage = "The saved subtitle file is unavailable. Choose it again."
             }
@@ -304,6 +304,16 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
 
     func externalSubtitlesUnavailable() {
         subtitleStatusMessage = "The subtitle file could not be loaded. Choose a readable subtitle file."
+    }
+
+    func noteUnsupportedSubtitleEffects() {
+        subtitleStatusMessage = "Some ASS/SSA effects are not supported. Supported text and styles will still appear."
+    }
+
+    func subtitleTextForCapture(at time: Double) -> String {
+        guard subtitleSelection != "off", subtitleSelection != "external" else { return "" }
+        var snapshot = captionTimeline
+        return snapshot.text(at: time - subtitleDelay)
     }
 
     func tick(time: Double, duration: Double) {

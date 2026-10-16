@@ -26,6 +26,7 @@ final class PlayerPreferences: ObservableObject {
     @Published var subtitleLanguage: String { didSet { defaults.set(subtitleLanguage, forKey: "subtitleLanguage") } }
     @Published var audioLanguage: String { didSet { defaults.set(audioLanguage, forKey: "audioLanguage") } }
     @Published var subtitlesByDefault: Bool { didSet { defaults.set(subtitlesByDefault, forKey: "subtitlesByDefault") } }
+    @Published var useSubtitleFileStyles: Bool { didSet { defaults.set(useSubtitleFileStyles, forKey: "useSubtitleFileStyles") } }
     @Published var maximumVolume: Float {
         didSet {
             let normalized = maximumVolume.isFinite ? min(max(maximumVolume, 1), 4) : oldValue
@@ -71,6 +72,7 @@ final class PlayerPreferences: ObservableObject {
         subtitleLanguage = defaults.string(forKey: "subtitleLanguage") ?? ""
         audioLanguage = defaults.string(forKey: "audioLanguage") ?? ""
         subtitlesByDefault = defaults.object(forKey: "subtitlesByDefault") as? Bool ?? true
+        useSubtitleFileStyles = defaults.object(forKey: "useSubtitleFileStyles") as? Bool ?? true
         let savedMaximum = defaults.object(forKey: "maximumVolume") as? Float ?? 2
         maximumVolume = savedMaximum.isFinite ? min(max(savedMaximum, 1), 4) : 2
         limitAudioPeaks = defaults.object(forKey: "limitAudioPeaks") as? Bool ?? true

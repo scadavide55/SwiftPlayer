@@ -41,6 +41,9 @@ struct SubtitleAppearanceView: View {
     @ObservedObject var preferences: PlayerPreferences
     var body: some View {
         Form {
+            Toggle("Use styles and positions from ASS/SSA files", isOn: $preferences.useSubtitleFileStyles)
+            Text("Turn this off to use the font and appearance below for ASS/SSA text. Image subtitles retain their original appearance.")
+                .font(.caption).foregroundStyle(.secondary)
             Picker("Font", selection: $preferences.appearance.fontFamily) {
                 Text("System").tag("System")
                 ForEach(Array(Set(NSFontManager.shared.availableFontFamilies + [preferences.appearance.fontFamily])).filter { $0 != "System" }.sorted(), id: \.self) { Text($0).tag($0) }
@@ -117,12 +120,32 @@ struct CaptionOverlay: View {
     @ObservedObject var preferences: PlayerPreferences
     let controlsVisible: Bool
     let nativeRendering: Bool
+    var display = VideoDisplayOptions()
+    var videoSize = CGSize.zero
     private var text: String {
         if media.subtitleSelection == "off" { return "" }
         if media.subtitleSelection == "external" { return model.currentSubtitleText }
         return nativeRendering ? "" : media.embeddedText
     }
     var body: some View {
+        if media.subtitleSelection == "external", let frame = model.currentSubtitleImage {
+            GeometryReader { geometry in
+                let bounds = CGRect(origin: .zero, size: geometry.size)
+                let custom = display.frame(in: bounds)
+                let ratio = videoSize.width > 0 && videoSize.height > 0 ? videoSize.width / videoSize.height : frame.canvas.width / frame.canvas.height
+                let fitted = display.aspect == .original ? subtitleVideoRect(bounds, ratio: ratio, fill: display.fit == .fill) : custom
+                Canvas { context, _ in
+                    for part in frame.parts {
+                        let r = part.bounds
+                        context.draw(Image(decorative: part.image, scale: 1), in: CGRect(
+                            x: fitted.minX + r.minX / frame.canvas.width * fitted.width,
+                            y: fitted.minY + r.minY / frame.canvas.height * fitted.height,
+                            width: r.width / frame.canvas.width * fitted.width,
+                            height: r.height / frame.canvas.height * fitted.height))
+                    }
+                }
+            }.clipped().allowsHitTesting(false).accessibilityLabel("Image subtitles")
+        } else {
         VStack {
             if preferences.appearance.position != "Top" { Spacer(minLength: 0) }
             if !text.isEmpty { StyledSubtitle(text: text, appearance: preferences.appearance) }
@@ -133,5 +156,12 @@ struct CaptionOverlay: View {
         .padding(.bottom, controlsVisible ? 70 : 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .allowsHitTesting(false)
+        }
     }
+}
+
+private func subtitleVideoRect(_ bounds: CGRect, ratio: CGFloat, fill: Bool) -> CGRect {
+    let useHeight = (bounds.width / max(1, bounds.height) > ratio) != fill
+    let size = useHeight ? CGSize(width: bounds.height * ratio, height: bounds.height) : CGSize(width: bounds.width, height: bounds.width / ratio)
+    return CGRect(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2, width: size.width, height: size.height)
 }

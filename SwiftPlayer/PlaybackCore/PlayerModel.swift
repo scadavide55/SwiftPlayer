@@ -20,6 +20,8 @@ final class PlayerModel: ObservableObject {
     @Published var currentFileName: String = ""
     @Published var subtitleCues: [SubtitleCue] = [] {
         didSet {
+            cancelSubtitleImage()
+            hasStyledSubtitles = subtitleCues.contains { $0.styled != nil }
             subtitleOrder = subtitleCues.indices.sorted { subtitleCues[$0].start < subtitleCues[$1].start }
             var maximumEnd = -Double.infinity
             subtitleMaximumEnds = subtitleOrder.map {
@@ -39,6 +41,12 @@ final class PlayerModel: ObservableObject {
         }
     }
     @Published var currentSubtitleText: String = ""
+    @Published private(set) var currentSubtitleImage: SubtitleImageFrame?
+    private var subtitleImageTask: Task<Void, Never>?
+    private var subtitleImageIdentifier = UUID()
+    private var renderedSubtitleKey: String?
+    private var subtitleStyleObservation: AnyCancellable?
+    private var hasStyledSubtitles = false
     @Published var playbackFailed: Bool = false
     @Published var playbackErrorMessage: String = ""
     @Published var isLoading: Bool = false
@@ -110,7 +118,7 @@ final class PlayerModel: ObservableObject {
     private var failureObserver: NSObjectProtocol?
     private var subtitleLoadTask: Task<Void, Never>?
     private var subtitleLoadIdentifier = UUID()
-    private var externalSubtitleLocation: (url: URL, folder: URL?)?
+    private var externalSubtitleLocation: (url: URL, folder: URL?, companion: URL?, track: Int?)?
     private var subtitleMaximumEnds: [Double] = []
     private var subtitleOrder: [Int] = []
     private var fastSeekTask: Task<Void, Never>?
@@ -128,11 +136,14 @@ final class PlayerModel: ObservableObject {
         mediaControls.onSubtitleDelayChanged = { [weak self] delay in
             if self?.subtitleOffset != delay { self?.subtitleOffset = delay }
         }
-        mediaControls.onRestoreExternalSubtitles = { [weak self] url in
+        mediaControls.onRestoreExternalSubtitles = { [weak self] url, companion, track in
             guard let self else { return }
-            self.loadSubtitles(url: url, encoding: self.mediaControls.externalSubtitleEncoding)
+            self.loadSubtitles(url: url, encoding: self.mediaControls.externalSubtitleEncoding, companion: companion, track: track)
         }
         if let preferences {
+            subtitleStyleObservation = preferences.$useSubtitleFileStyles.dropFirst().sink { [weak self] _ in
+                Task { @MainActor [weak self] in self?.cancelSubtitleImage(); self?.updateSubtitleDisplay() }
+            }
             audioProcessingObservation = preferences.$limitAudioPeaks.combineLatest(preferences.$normalizeAudio)
                 .sink { [weak self] limiter, normalization in
                     self?.audioGain.configure(limiter: limiter, normalization: normalization)
@@ -225,6 +236,7 @@ final class PlayerModel: ObservableObject {
     deinit {
         loadTask?.cancel()
         subtitleLoadTask?.cancel()
+        subtitleImageTask?.cancel()
         fastSeekTask?.cancel()
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         if let failureObserver { NotificationCenter.default.removeObserver(failureObserver) }
@@ -513,24 +525,29 @@ final class PlayerModel: ObservableObject {
 
     func reloadSubtitles(encoding: SubtitleEncoding) {
         guard let location = externalSubtitleLocation else { return }
-        loadSubtitles(url: location.url, accessing: location.folder, encoding: encoding, activate: false)
+        loadSubtitles(url: location.url, accessing: location.folder, encoding: encoding, activate: false, companion: location.companion, track: location.track)
     }
 
     func loadSubtitles(url: URL, accessing folder: URL? = nil,
-                       encoding: SubtitleEncoding = .automatic, activate: Bool = true) {
+                       encoding: SubtitleEncoding = .automatic, activate: Bool = true, companion: URL? = nil, track: Int? = nil) {
         subtitleLoadTask?.cancel()
         subtitleLoadIdentifier = UUID()
         let identifier = subtitleLoadIdentifier
         let selectionRevision = mediaControls.subtitleSelectionRevision
+        let languages = preferences?.subtitleLanguage.isEmpty == false ? [preferences!.subtitleLanguage] : Locale.preferredLanguages
+        let pair = ["idx", "sub"].contains(url.pathExtension.lowercased()) ? companion ?? url.deletingPathExtension().appendingPathExtension(url.pathExtension.lowercased() == "idx" ? "sub" : "idx") : nil
         subtitleLoadTask = Task { [weak self] in
             let worker = Task.detached(priority: .userInitiated) {
                 let folderScoped = folder?.startAccessingSecurityScopedResource() ?? false
                 let scoped = url.startAccessingSecurityScopedResource()
+                let pairScoped = pair?.startAccessingSecurityScopedResource() ?? false
                 defer {
                     if scoped { url.stopAccessingSecurityScopedResource() }
                     if folderScoped { folder?.stopAccessingSecurityScopedResource() }
+                    if pairScoped { pair?.stopAccessingSecurityScopedResource() }
                 }
-                return (parseSubtitles(from: url, encoding: encoding), SubtitleFileReference.capture(url))
+                return (parseSubtitles(from: url, encoding: encoding, companion: pair, track: track, preferredLanguages: languages),
+                        SubtitleFileReference.capture(url, companion: pair, subtitleTrack: track))
             }
             let (cues, reference) = await withTaskCancellationHandler {
                 await worker.value
@@ -544,10 +561,11 @@ final class PlayerModel: ObservableObject {
                 return
             }
             self.subtitleCues = cues
-            self.externalSubtitleLocation = (url, folder)
+            self.externalSubtitleLocation = (url, folder, pair, track)
             self.subtitlesEnabled = true
             self.mediaControls.useExternalSubtitles(named: url.lastPathComponent, reference: reference,
                 encoding: encoding, activate: activate && self.mediaControls.subtitleSelectionRevision == selectionRevision)
+            if cues.contains(where: { $0.styled?.hasUnsupportedEffects == true }) { self.mediaControls.noteUnsupportedSubtitleEffects() }
             self.subtitleLoadTask = nil
         }
     }
@@ -555,6 +573,7 @@ final class PlayerModel: ObservableObject {
     func updateSubtitleDisplay() {
         guard subtitlesEnabled, !subtitleCues.isEmpty else {
             if !currentSubtitleText.isEmpty { currentSubtitleText = "" }
+            cancelSubtitleImage()
             return
         }
         let adjustedTime = currentTime - subtitleOffset
@@ -568,17 +587,73 @@ final class PlayerModel: ObservableObject {
             else { upper = middle }
         }
         var text = ""
+        var activeIndex: Int?
+        var styledIndices: [Int] = []
         if lower < subtitleCues.count {
             for index in subtitleOrder[lower...] {
                 let cue = subtitleCues[index]
                 if cue.start > adjustedTime { break }
-                if cue.end > adjustedTime { text = cue.text; break }
+                if cue.end > adjustedTime {
+                    if activeIndex == nil { text = cue.text; activeIndex = index }
+                    if cue.styled != nil, styledIndices.count < 64 { styledIndices.append(index) }
+                    if !hasStyledSubtitles || preferences?.useSubtitleFileStyles == false { break }
+                }
             }
         }
         if currentSubtitleText != text { currentSubtitleText = text }
+        let bitmap = activeIndex.flatMap { subtitleCues[$0].bitmap }
+        let styled = preferences?.useSubtitleFileStyles == false ? [] : styledIndices.compactMap { subtitleCues[$0].styled }
+        if mediaControls.subtitleSelection == "external", bitmap != nil || !styled.isEmpty {
+            let animated = styled.contains(where: \.animated)
+            let identity = "\(activeIndex ?? -1):\(styledIndices):"
+            let key = identity + "\(animated ? floor(adjustedTime * 10) : 0)"
+            if renderedSubtitleKey != key {
+                let keepPrevious = bitmap == nil && renderedSubtitleKey?.hasPrefix(identity) == true
+                cancelSubtitleImage(clear: !keepPrevious)
+                renderedSubtitleKey = key
+                let generation = subtitleImageIdentifier
+                subtitleImageTask = Task { [weak self] in
+                    let worker = Task.detached(priority: .userInitiated) {
+                        if let bitmap { return try bitmap.render() }
+                        return try ASSSubtitleRenderer.render(styled, at: adjustedTime)
+                    }
+                    let image = try? await withTaskCancellationHandler { try await worker.value } onCancel: { worker.cancel() }
+                    guard let self, self.subtitleImageIdentifier == generation, !Task.isCancelled else { return }
+                    self.currentSubtitleImage = image
+                    self.subtitleImageTask = nil
+                    if image == nil { self.mediaControls.externalSubtitlesUnavailable() }
+                }
+            }
+        } else { cancelSubtitleImage() }
+    }
+
+    /// Frame export must sample the captured clock, independently of UI delivery.
+    func externalSubtitleSnapshot(at seconds: Double) -> (text: String, image: SubtitleRenderRequest?) {
+        guard seconds.isFinite, subtitlesEnabled, mediaControls.subtitleSelection == "external" else { return ("", nil) }
+        let time = seconds - subtitleOffset
+        var text: String?, styled: [ASSSubtitle] = []
+        for index in subtitleOrder {
+            let cue = subtitleCues[index]
+            if cue.start > time { break }
+            guard cue.end > time else { continue }
+            if text == nil { text = cue.text }
+            if let bitmap = cue.bitmap { return ("", .bitmap(bitmap)) }
+            if let style = cue.styled, preferences?.useSubtitleFileStyles != false, styled.count < 64 { styled.append(style) }
+            else if !hasStyledSubtitles || preferences?.useSubtitleFileStyles == false { break }
+        }
+        return (text ?? "", styled.isEmpty ? nil : .styled(styled, time))
+    }
+
+    private func cancelSubtitleImage(clear: Bool = true) {
+        subtitleImageIdentifier = UUID()
+        subtitleImageTask?.cancel()
+        subtitleImageTask = nil
+        renderedSubtitleKey = nil
+        if clear, currentSubtitleImage != nil { currentSubtitleImage = nil }
     }
     /// Call on window close / app termination to release decoder resources immediately.
     func teardown() {
+        cancelSubtitleImage()
         saveHistory(force: true)
         historySession = nil
         historyCompleted = false

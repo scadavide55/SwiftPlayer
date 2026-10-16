@@ -16,7 +16,7 @@ nonisolated struct FrameCaption: Sendable {
 }
 
 nonisolated enum FrameCaptureImage {
-    static func png(_ image: CGImage, caption: FrameCaption?) throws -> Data {
+    static func png(_ image: CGImage, caption: FrameCaption?, subtitles: SubtitleImageFrame? = nil) throws -> Data {
         try Task.checkCancellation()
         guard image.width > 0, image.height > 0, image.width <= 8192, image.height <= 8192,
               let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
@@ -24,6 +24,7 @@ nonisolated enum FrameCaptureImage {
                 bytesPerRow: 0, space: colorSpace,
                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { throw failure() }
         context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        subtitles?.draw(in: context, rect: CGRect(x: 0, y: 0, width: image.width, height: image.height))
         if let caption, !caption.text.isEmpty { draw(caption, in: context, width: CGFloat(image.width), height: CGFloat(image.height)) }
         try Task.checkCancellation()
         guard let rendered = context.makeImage() else { throw failure() }
