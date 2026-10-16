@@ -21,6 +21,7 @@ private struct PlayerContentView: View {
     @StateObject private var subtitleSearch = SubtitleSearchController()
     @StateObject private var displaySleep = DisplaySleepController()
     @StateObject private var windowControls = PlayerWindowControls()
+    @StateObject private var frameCapture = FrameCaptureController()
     @ObservedObject private var subtitleFolders = SubtitleFolderStore.shared
     @State private var showSubtitleMatches = false
     @State private var hasLoadedFile: Bool = false
@@ -50,7 +51,7 @@ private struct PlayerContentView: View {
                 }
             }
         }
-        .background(PlayerCommandFocus(context: PlayerWindowContext(menus: menuState, viewing: windowControls, open: requestOpen,
+        .background(PlayerCommandFocus(context: PlayerWindowContext(menus: menuState, viewing: windowControls, capture: frameCapture, open: requestOpen,
             jump: { showJump = true }, information: { showInformation = true },
             subtitles: openSubtitlePicker, findSubtitles: {
                 showSubtitleMatches = true
@@ -77,7 +78,7 @@ private struct PlayerContentView: View {
                 RecentMediaStore.shared.record(url)
             }
         }
-        .onChange(of: model.sourceURL) { _ in startSubtitleSearch(automatic: true) }
+        .onChange(of: model.sourceURL) { _ in frameCapture.cancel(); startSubtitleSearch(automatic: true) }
         .onChange(of: subtitleFolders.entries.map(\.id)) { _ in startSubtitleSearch(automatic: !showSubtitleMatches) }
         .onChange(of: preferences.autoFindSubtitles) { _ in startSubtitleSearch(automatic: true) }
         .onChange(of: preferences.subtitleLanguage) { _ in startSubtitleSearch(automatic: true) }
@@ -85,9 +86,21 @@ private struct PlayerContentView: View {
         .onAppear {
             displaySleep.attach(model: model, preferences: preferences)
             windowControls.observe(model.player)
+            frameCapture.attach(model: model, preferences: preferences, viewing: windowControls)
         }
         .onChange(of: pipController.isActive) { active in model.mediaControls.nativeSubtitleRendering = active }
         .frame(minWidth: 480, minHeight: 320)
+        .overlay(alignment: .bottomTrailing) {
+            if frameCapture.isCapturing {
+                ProgressView("Capturing frame…").controlSize(.small).padding(12)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                    .padding(12).allowsHitTesting(false)
+            }
+        }
+        .alert("Couldn't capture the frame", isPresented: Binding(get: { frameCapture.errorMessage != nil },
+            set: { if !$0 { frameCapture.errorMessage = nil } })) {
+            Button("OK") { frameCapture.errorMessage = nil }
+        } message: { Text(frameCapture.errorMessage ?? "") }
         .background(PlayerWindowObserver(onResignKey: { stopInteractions() },
                                          onWindowChanged: { windowControls.attach($0) }))
         .alert("Replace current video?", isPresented: $showReplaceConfirm, presenting: pendingReplacementURL) { url in
@@ -103,6 +116,7 @@ private struct PlayerContentView: View {
         .onDisappear {
             displaySleep.detach()
             windowControls.detach()
+            frameCapture.detach()
             subtitleSearch.cancel()
             stopInteractions()
             pipController.detach()

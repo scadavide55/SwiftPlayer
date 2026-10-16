@@ -69,6 +69,11 @@ final class PlayerWindowControls: ObservableObject {
 
     var hasVideo: Bool { videoSize.width.isFinite && videoSize.height.isFinite && videoSize.width > 0 && videoSize.height > 0 }
     var canResize: Bool { isAttached && hasVideo && !isFullScreen && !isTransitioning }
+    var subtitleReferenceHeight: Double {
+        guard hasVideo else { return 360 }
+        let bounds = window?.contentView?.bounds.size ?? CGSize(width: 640, height: 360)
+        return max(1, min(bounds.height, bounds.width * videoSize.height / videoSize.width))
+    }
 
     func attach(_ window: NSWindow?) {
         guard self.window !== window else { return }

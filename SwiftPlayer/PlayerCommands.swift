@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 struct PlayerWindowContext: Equatable {
     let menus: PlayerMenuState
     let viewing: PlayerWindowControls
+    let capture: FrameCaptureController
     let open: (URL) -> Void
     let jump: () -> Void
     let information: () -> Void
@@ -38,6 +39,7 @@ struct PlayerCommands: Commands {
     @ObservedObject private var recent = RecentMediaStore.shared
     @StateObject private var inactive = PlayerMenuState()
     @StateObject private var inactiveViewing = PlayerWindowControls()
+    @StateObject private var inactiveCapture = FrameCaptureController()
     @ObservedObject private var preferences = PlayerPreferences.shared
     @Environment(\.openWindow) private var openWindow
     var body: some Commands {
@@ -68,7 +70,7 @@ struct PlayerCommands: Commands {
             AudioMenu(state: window?.menus ?? inactive, preferences: preferences)
         }
         CommandMenu("Video") {
-            VideoMenu(viewing: window?.viewing ?? inactiveViewing)
+            VideoMenu(viewing: window?.viewing ?? inactiveViewing, capture: window?.capture ?? inactiveCapture)
         }
         CommandMenu("Subtitles") {
             SubtitlesMenu(state: window?.menus ?? inactive, preferences: preferences,
@@ -90,6 +92,8 @@ struct PlayerCommands: Commands {
 
 struct VideoMenu: View {
     @ObservedObject var viewing: PlayerWindowControls
+    @ObservedObject var capture: FrameCaptureController
+    @ObservedObject private var captureCoordinator = FrameCaptureCoordinator.shared
     var body: some View {
         Button(viewing.isFullScreen ? "Exit Full Screen" : "Enter Full Screen") { viewing.toggleFullScreen() }
             .keyboardShortcut("f", modifiers: [.command, .control])
@@ -111,6 +115,15 @@ struct VideoMenu: View {
             Divider()
             Button("Fit to Screen") { viewing.resize(scale: nil) }
         }.disabled(!viewing.canResize)
+        Divider()
+        Menu("Capture Frame") {
+            Toggle("Include Subtitles", isOn: $capture.includeSubtitles)
+            Divider()
+            Button("Save Frame…") { capture.saveFrame() }
+            Button("Copy Frame") { capture.copyFrame() }
+            if capture.isCapturing { Text("Capturing Frame…") }
+            else if !capture.statusMessage.isEmpty { Text(capture.statusMessage) }
+        }.disabled(!viewing.hasVideo || captureCoordinator.isBusy)
     }
 }
 

@@ -338,7 +338,7 @@
 				CODE_SIGN_ENTITLEMENTS = SwiftPlayer/SwiftPlayer.entitlements;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
+				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = SwiftPlayer;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
@@ -376,7 +376,7 @@
 				CODE_SIGN_ENTITLEMENTS = SwiftPlayer/SwiftPlayer.entitlements;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
+				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = SwiftPlayer;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
