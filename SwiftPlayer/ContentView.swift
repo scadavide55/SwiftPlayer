@@ -34,6 +34,7 @@ private struct PlayerContentView: View {
     @State private var isTargeted: Bool = false
     @State private var showHomeConfirm: Bool = false
     @State private var showSubtitlePanel: Bool = false
+    @State private var subtitleImport: SubtitleImportRequest?
     @State private var isFullScreen: Bool = false
     @State private var showAppearance = false
     @State private var showJump = false
@@ -63,6 +64,11 @@ private struct PlayerContentView: View {
         }
         .sheet(isPresented: $showSubtitleMatches) {
             SubtitleMatchesView(search: subtitleSearch) { model.loadSubtitles(url: $0.url, accessing: $0.folder) }
+        }
+        .sheet(item: $subtitleImport) { request in
+            SubtitleImportView(url: request.url, encoding: .automatic) { encoding in
+                model.loadSubtitles(url: request.url, encoding: encoding)
+            }
         }
         .sheet(isPresented: $showJump) { JumpToTimeView(duration: model.duration) { model.seek(to: $0) } }
         .sheet(isPresented: $showInformation) { MediaInformationView(model: model, media: model.mediaControls) }
@@ -276,6 +282,7 @@ private struct PlayerContentView: View {
     private var isInteracting: Bool {
         model.isScrubbing || model.isLoading || model.playbackFailed || model.playbackFinished
             || showSubtitlePanel || showHomeConfirm || showReplaceConfirm || showAppearance || showJump || showInformation
+            || subtitleImport != nil
     }
 
     private func goHome() {
@@ -285,6 +292,7 @@ private struct PlayerContentView: View {
         hasLoadedFile = false
         activeSourceURL = nil
         showSubtitlePanel = false
+        subtitleImport = nil
         pendingReplacementURL = nil
     }
 
@@ -317,7 +325,8 @@ private struct PlayerContentView: View {
         panel.allowedContentTypes = supportedSubtitleExtensions.compactMap { UTType(filenameExtension: $0) }
 
         if panel.runModal() == .OK, let url = panel.url {
-            model.loadSubtitles(url: url)
+            showSubtitlePanel = false
+            subtitleImport = SubtitleImportRequest(url: url)
         }
     }
 
@@ -328,6 +337,7 @@ private struct PlayerContentView: View {
     }
 
     private func load(url: URL) {
+        subtitleImport = nil
         stopInteractions()
         pipController.stop()
         activeSourceURL = url

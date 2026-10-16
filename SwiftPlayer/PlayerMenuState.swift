@@ -28,6 +28,7 @@ final class PlayerMenuState: ObservableObject {
         var audioTracks: [Choice] = []
         var chapters: [Chapter] = []
         var externalSubtitleName = ""
+        var subtitleEncoding: SubtitleEncoding = .automatic
     }
 
     @Published private(set) var snapshot = Snapshot()
@@ -71,7 +72,8 @@ final class PlayerMenuState: ObservableObject {
             subtitleTracks: media.subtitleTracks.map { Choice(id: $0.id, name: $0.name) },
             audioTracks: media.audioTracks.map { Choice(id: $0.id, name: $0.name) },
             chapters: media.chapters.map { Chapter(id: $0.id, title: $0.title, start: $0.start) },
-            externalSubtitleName: media.externalSubtitleName)
+            externalSubtitleName: media.externalSubtitleName,
+            subtitleEncoding: media.externalSubtitleEncoding)
         if updated != snapshot { snapshot = updated }
     }
 }

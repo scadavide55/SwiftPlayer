@@ -147,6 +147,10 @@ struct SubtitlesMenu: View {
         }.disabled(!state.snapshot.hasMedia)
         Button("Load Subtitle File…", action: load).disabled(!state.snapshot.hasMedia)
         Button("Find Matching Subtitles…", action: find).disabled(!state.snapshot.hasMedia)
+        Picker("External Text Encoding", selection: Binding(get: { state.snapshot.subtitleEncoding },
+            set: { state.model?.reloadSubtitles(encoding: $0) })) {
+            ForEach(SubtitleEncoding.allCases) { Text($0.title).tag($0) }
+        }.disabled(state.snapshot.externalSubtitleName.isEmpty)
         LanguagePreferencePicker(title: "Preferred Language", selection: $preferences.subtitleLanguage)
         Divider()
         Button("Appearance and Fonts…", action: appearance)

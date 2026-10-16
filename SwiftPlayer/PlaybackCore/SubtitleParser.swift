@@ -8,7 +8,7 @@ struct SubtitleCue: Sendable {
 
 nonisolated let supportedSubtitleExtensions: [String] = ["srt", "vtt", "ass", "ssa"]
 
-nonisolated func parseSubtitles(from url: URL) -> [SubtitleCue] {
+nonisolated func parseSubtitles(from url: URL, encoding: SubtitleEncoding = .automatic) -> [SubtitleCue] {
     let scoped = url.startAccessingSecurityScopedResource()
     defer { if scoped { url.stopAccessingSecurityScopedResource() } }
     guard !Task.isCancelled, let input = try? FileHandle(forReadingFrom: url) else { return [] }
@@ -16,8 +16,7 @@ nonisolated func parseSubtitles(from url: URL) -> [SubtitleCue] {
     let maximumBytes = 16 * 1024 * 1024
     guard let data = try? input.read(upToCount: maximumBytes + 1),
           data.count <= maximumBytes, !Task.isCancelled else { return [] }
-    let hasUTF16BOM = data.starts(with: [0xff, 0xfe]) || data.starts(with: [0xfe, 0xff])
-    guard let raw = String(data: data, encoding: hasUTF16BOM ? .utf16 : .utf8) else { return [] }
+    guard let raw = encoding.decode(data) else { return [] }
     let content = raw.replacingOccurrences(of: "\r\n", with: "\n")
         .replacingOccurrences(of: "\r", with: "\n")
         .trimmingCharacters(in: CharacterSet(charactersIn: "\u{feff}"))
