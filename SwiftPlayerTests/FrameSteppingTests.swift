@@ -16,7 +16,7 @@ final class FrameSteppingTests: DebugMatrixTestCase {
         var steps: [Int] = []
         var seeks: [Int] = []
         view.onFrameStep = { steps.append($0) }
-        view.onArrowDown = { seeks.append($0) }
+        view.onArrowDown = { direction, _ in seeks.append(direction) }
         view.keyDown(with: try key(123, flags: .control))
         view.keyDown(with: try key(124, flags: [.control, .capsLock]))
         view.keyDown(with: try key(124, flags: .control, repeated: true))

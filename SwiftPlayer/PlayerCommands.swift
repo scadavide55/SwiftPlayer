@@ -148,10 +148,10 @@ struct PlaybackMenu: View {
             }
         }.disabled(state.snapshot.chapters.isEmpty)
         Button("Back 10 Seconds") {
-            if let model = state.model { model.seek(to: model.currentTime - 10) }
+            state.model?.skip(by: -10)
         }.disabled(!state.snapshot.canNavigate)
         Button("Forward 10 Seconds") {
-            if let model = state.model { model.seek(to: model.currentTime + 10) }
+            state.model?.skip(by: 10)
         }.disabled(!state.snapshot.canNavigate)
         Button("Previous Frame") { state.model?.stepFrame(direction: -1) }
             .keyboardShortcut(.leftArrow, modifiers: [.control]).disabled(!state.snapshot.canStepBackward)
@@ -167,6 +167,7 @@ struct PlaybackMenu: View {
 struct AudioMenu: View {
     @ObservedObject var state: PlayerMenuState
     @ObservedObject var preferences: PlayerPreferences
+    @ObservedObject private var systemVolume = SystemVolumeController.shared
     var body: some View {
         Picker("Audio Track", selection: Binding(get: { state.snapshot.audioSelection }, set: { state.model?.mediaControls.audioSelection = $0 })) {
             Text("Automatic").tag("automatic")
@@ -174,10 +175,10 @@ struct AudioMenu: View {
         }.disabled(state.snapshot.audioTracks.isEmpty)
         LanguagePreferencePicker(title: "Preferred Language", selection: $preferences.audioLanguage)
         Divider()
-        Toggle("Mute", isOn: Binding(get: { state.snapshot.isMuted }, set: { state.model?.isMuted = $0 }))
-            .disabled(state.model == nil)
-        Button("Increase Volume") { state.model?.volumeUp() }.disabled(state.model == nil)
-        Button("Decrease Volume") { state.model?.volumeDown() }.disabled(state.model == nil)
+        Toggle("Mute System Audio", isOn: Binding(get: { systemVolume.isMuted }, set: { systemVolume.setMuted($0) }))
+            .disabled(!systemVolume.canSetMute)
+        Button("Increase System Volume") { systemVolume.increase() }.disabled(!systemVolume.canSetVolume)
+        Button("Decrease System Volume") { systemVolume.decrease() }.disabled(!systemVolume.canSetVolume)
     }
 }
 

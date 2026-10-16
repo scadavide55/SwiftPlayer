@@ -25,7 +25,7 @@ final class InteractionDebugMatrixTests: DebugMatrixTestCase {
                     var directions: [Int] = []
                     var releases = 0
                     view.onSpace = { plays += 1 }
-                    view.onArrowDown = { directions.append($0) }
+                    view.onArrowDown = { direction, _ in directions.append(direction) }
                     view.onArrowUp = { releases += 1 }
                     switch family {
                     case 0:
@@ -34,7 +34,7 @@ final class InteractionDebugMatrixTests: DebugMatrixTestCase {
                         XCTAssertEqual(plays, 1)
                     case 1:
                         for index in 0...variant { view.keyDown(with: try key(index % 2 == 0 ? 123 : 124, repeatKey: index > 0)) }
-                        XCTAssertEqual(directions, (0...variant).map { $0 % 2 == 0 ? -1 : 1 })
+                        XCTAssertEqual(directions, [-1], "Native repeats must not compete with the hold timer.")
                         view.keyUp(with: try key(variant % 2 == 0 ? 123 : 124, up: true))
                         XCTAssertEqual(releases, 1)
                     case 2:

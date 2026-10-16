@@ -4,7 +4,8 @@ import UniformTypeIdentifiers
 import AVFoundation
 
 struct ContentView: View {
-    @StateObject private var menuState = PlayerMenuState(model: PlayerModel(preferences: PlayerPreferences.shared, history: .shared))
+    @StateObject private var menuState = PlayerMenuState(model: PlayerModel(preferences: PlayerPreferences.shared,
+        history: .shared, restoreApplicationVolume: false))
 
     var body: some View {
         if let model = menuState.model {
@@ -17,6 +18,7 @@ private struct PlayerContentView: View {
     @ObservedObject var model: PlayerModel
     let menuState: PlayerMenuState
     @ObservedObject private var preferences = PlayerPreferences.shared
+    @ObservedObject private var systemVolume = SystemVolumeController.shared
     @StateObject private var pipController = PiPController()
     @StateObject private var subtitleSearch = SubtitleSearchController()
     @StateObject private var displaySleep = DisplaySleepController()
@@ -181,11 +183,11 @@ private struct PlayerContentView: View {
                 )
                 .background(MouseActivityTracker(onActivity: registerActivity))
                 .background(KeyEventHandlingView(
-                    onSpace: { model.togglePlayPause() },
-                    onArrowDown: { direction in handleArrowDown(direction: direction) },
+                    onSpace: { registerActivity(); model.togglePlayPause() },
+                    onArrowDown: { direction, mode in handleArrowDown(direction: direction, mode: mode) },
                     onArrowUp: { handleArrowUp() },
-                    onVolumeUp: { model.volumeUp() },
-                    onVolumeDown: { model.volumeDown() },
+                    onVolumeUp: { registerActivity(); systemVolume.increase() },
+                    onVolumeDown: { registerActivity(); systemVolume.decrease() },
                     onFrameStep: { direction in model.stepFrame(direction: direction); registerActivity() }
                 ))
                 .onAppear {
@@ -338,9 +340,9 @@ private struct PlayerContentView: View {
         windowControls.toggleFullScreen()
     }
 
-    private func handleArrowDown(direction: Int) {
+    private func handleArrowDown(direction: Int, mode: ArrowSeekMode) {
         registerActivity()
-        model.beginFastSeeking(direction: direction)
+        model.beginFastSeeking(direction: direction, mode: mode)
     }
 
     private func handleArrowUp() {
@@ -502,7 +504,7 @@ struct MouseActivityTracker: NSViewRepresentable {
 }
 struct KeyEventHandlingView: NSViewRepresentable {
     let onSpace: () -> Void
-    let onArrowDown: (Int) -> Void // -1 left, +1 right
+    let onArrowDown: (Int, ArrowSeekMode) -> Void
     let onArrowUp: () -> Void
     let onVolumeUp: () -> Void
     let onVolumeDown: () -> Void
@@ -529,6 +531,7 @@ struct KeyEventHandlingView: NSViewRepresentable {
     }
 
     static func dismantleNSView(_ nsView: KeyCatcherView, coordinator: ()) {
+        nsView.invalidateKeyMonitor()
         nsView.onArrowUp?()
         nsView.onSpace = nil
         nsView.onArrowDown = nil
@@ -540,59 +543,86 @@ struct KeyEventHandlingView: NSViewRepresentable {
 
     final class KeyCatcherView: NSView {
         var onSpace: (() -> Void)?
-        var onArrowDown: ((Int) -> Void)?
+        var onArrowDown: ((Int, ArrowSeekMode) -> Void)?
         var onArrowUp: (() -> Void)?
         var onVolumeUp: (() -> Void)?
         var onVolumeDown: (() -> Void)?
         var onFrameStep: ((Int) -> Void)?
+        private var keyMonitor: Any?
+        private var hasActiveArrow = false
 
         override var acceptsFirstResponder: Bool { true }
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            if hasActiveArrow { onArrowUp?() }
+            invalidateKeyMonitor()
+            if window != nil {
+                keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
+                    guard let self, let window = self.window, event.window === window,
+                          window.attachedSheet == nil else { return event }
+                    if let editor = window.firstResponder as? NSTextView, editor.isEditable,
+                       !(event.type == .keyUp && self.hasActiveArrow) { return event }
+                    return self.handlePlaybackKey(event) ? nil : event
+                }
+            }
             window?.makeFirstResponder(self)
+        }
+
+        func invalidateKeyMonitor() {
+            if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+            keyMonitor = nil
+            hasActiveArrow = false
         }
 
         override func resignFirstResponder() -> Bool {
             let resigned = super.resignFirstResponder()
-            if resigned { onArrowUp?() }
+            if resigned { hasActiveArrow = false; onArrowUp?() }
             return resigned
         }
 
         override func keyDown(with event: NSEvent) {
+            if !handlePlaybackKey(event) { super.keyDown(with: event) }
+        }
+
+        private func handlePlaybackKey(_ event: NSEvent) -> Bool {
+            if event.type == .keyUp {
+                guard event.keyCode == 123 || event.keyCode == 124 else { return false }
+                hasActiveArrow = false
+                onArrowUp?()
+                return true
+            }
             let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
             if modifiers == .control, event.keyCode == 123 || event.keyCode == 124 {
                 onFrameStep?(event.keyCode == 123 ? -1 : 1)
-                return
+                return true
             }
             guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty else {
-                super.keyDown(with: event)
-                return
+                return false
             }
             switch event.keyCode {
             case 49: // space
                 if !event.isARepeat { onSpace?() }
-            case 123: // left arrow
-                onArrowDown?(-1)
-            case 124: // right arrow
-                onArrowDown?(1)
+            case 123, 124: // left/right arrows; the player owns hold timing.
+                guard !event.isARepeat else { return true }
+                hasActiveArrow = true
+                let mode: ArrowSeekMode = modifiers.contains(.shift) ? .shuttle : .jump
+                onArrowDown?(event.keyCode == 123 ? -1 : 1, mode)
             case 126: // up arrow
                 onVolumeUp?()
             case 125: // down arrow
                 onVolumeDown?()
             default:
-                super.keyDown(with: event)
+                return false
             }
+            return true
         }
 
         override func keyUp(with event: NSEvent) {
-            switch event.keyCode {
-            case 123, 124:
-                onArrowUp?()
-            default:
-                super.keyUp(with: event)
-            }
+            if !handlePlaybackKey(event) { super.keyUp(with: event) }
         }
+
+        deinit { if let keyMonitor { NSEvent.removeMonitor(keyMonitor) } }
 
         override func hitTest(_ point: NSPoint) -> NSView? {
             nil

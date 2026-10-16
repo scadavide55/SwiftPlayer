@@ -9,6 +9,10 @@ let supportedExtensions: [String] = [
     "mp4", "mov", "m4v", "mp3", "m4a", "aac", "wav", "aiff", "caf"
 ] // audio containers
 
+enum ArrowSeekMode {
+    case jump, shuttle
+}
+
 @MainActor
 final class PlayerModel: ObservableObject {
    
@@ -124,10 +128,12 @@ final class PlayerModel: ObservableObject {
     private var fastSeekTask: Task<Void, Never>?
     private var fastSeekDirection: Int?
     private var fastSeekRate: Float?
+    private var wasPlayingInReverse = false
     private var seekIdentifier = UUID()
     private(set) var isSeeking = false
     
-    init(preferences: PlayerPreferences? = nil, history: PlaybackHistoryStore? = nil) {
+    init(preferences: PlayerPreferences? = nil, history: PlaybackHistoryStore? = nil,
+         restoreApplicationVolume: Bool = true) {
         let nativePlayer = AVPlayer()
         player = nativePlayer
         self.preferences = preferences
@@ -161,7 +167,7 @@ final class PlayerModel: ObservableObject {
                 self.isSynchronizingAudioState = false
             }
         }
-        if let preferences, preferences.rememberVolume {
+        if restoreApplicationVolume, let preferences, preferences.rememberVolume {
             volume = preferences.savedVolume
             isMuted = preferences.savedMute
             player.volume = min(volume, 1)
@@ -213,7 +219,17 @@ final class PlayerModel: ObservableObject {
         guard player.currentItem === item, item.status == .readyToPlay else { return }
         // Background callbacks can arrive later; always read the latest rate.
         let rate = player.rate
+        // The native rate has already become zero by the time a reverse-end
+        // notification arrives; retain its last non-zero direction.
+        if rate != 0 { wasPlayingInReverse = rate < 0 }
         if isFastSeeking {
+            if rate == 0, (fastSeekRate ?? 0) < 0, player.currentTime().seconds < 0.1 {
+                // A held reverse shuttle has reached the start. Keep its
+                // original playback intent until release instead of treating
+                // the native boundary stop as a new Pause command.
+                fastSeekRate = 0
+                return
+            }
             // Ignore our own hold transport, but let native controls interrupt
             // it without restoring the old rate over the user's new command.
             guard rate != fastSeekRate else { return }
@@ -368,6 +384,24 @@ final class PlayerModel: ObservableObject {
             // it immediately so it cannot overtake a subsequent seek or replay.
             MainActor.assumeIsolated {
                 guard let self, self.player.currentItem === item else { return }
+                if self.wasPlayingInReverse, self.player.currentTime().seconds < 0.1 {
+                    // Reaching the beginning in reverse is not completion of
+                    // the file and must not run forward end-of-file actions.
+                    if self.isFastSeeking, self.fastSeekDirection == -1 {
+                        self.fastSeekRate = 0
+                    } else {
+                        self.playbackRequested = false
+                        self.endFastSeeking()
+                    }
+                    self.player.pause()
+                    self.isPlaying = false
+                    self.currentTime = 0
+                    self.playbackFinished = false
+                    self.historyCompleted = false
+                    self.updateSubtitleDisplay()
+                    self.saveHistory(force: true)
+                    return
+                }
                 self.playbackRequested = false
                 self.endFastSeeking()
                 self.player.pause()
@@ -464,7 +498,7 @@ final class PlayerModel: ObservableObject {
         // the asynchronous step reaches its destination.
     }
 
-    func seek(to seconds: Double, preservingFinishedHistory: Bool = false) {
+    func seek(to seconds: Double, preservingFinishedHistory: Bool = false, tolerance: Double? = nil) {
         guard seconds.isFinite, duration.isFinite, duration > 0,
               let item = player.currentItem, item.status == .readyToPlay else { return }
         let target = min(max(seconds, 0), duration)
@@ -478,9 +512,11 @@ final class PlayerModel: ObservableObject {
         // keeps the completion that was just saved for the finished file.
         if !preservingFinishedHistory { historyCompleted = false }
         updateSubtitleDisplay()
-        // Let AVFoundation choose a responsive seek position for ordinary playback.
-        // Frame stepping uses the separate native step command.
-        player.seek(to: CMTime(seconds: target, preferredTimescale: 600)) { [weak self, weak item] finished in
+        // Timeline seeks keep native tolerance. Relative navigation needs a
+        // small non-zero bound so a long GOP cannot swallow an entire jump.
+        let allowed = tolerance.map { CMTime(seconds: $0, preferredTimescale: 600) } ?? .positiveInfinity
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
+                    toleranceBefore: allowed, toleranceAfter: allowed) { [weak self, weak item] finished in
             Task { @MainActor [weak self, weak item] in
                 guard let self, let item, self.player.currentItem === item,
                       self.seekIdentifier == identifier else { return }
@@ -495,32 +531,60 @@ final class PlayerModel: ObservableObject {
         }
     }
 
-    func beginFastSeeking(direction: Int) {
+    @discardableResult
+    func skip(by seconds: Double) -> Double? {
+        guard seconds.isFinite, seconds != 0, duration.isFinite, duration > 0,
+              player.currentItem?.status == .readyToPlay else { return nil }
+        // Accumulate rapid input against the requested target, but use the
+        // native clock once settled; the UI timestamp is delivered less often.
+        let clock = player.currentTime().seconds
+        let base = isSeeking || isScrubbing || !clock.isFinite ? currentTime : clock
+        let target = min(max(base + seconds, 0), duration)
+        seek(to: target, tolerance: min(0.25, abs(seconds) / 4))
+        return target
+    }
+
+    func beginFastSeeking(direction: Int, mode: ArrowSeekMode = .jump) {
         guard [-1, 1].contains(direction), player.currentItem?.status == .readyToPlay,
               fastSeekDirection != direction else { return }
         endFastSeeking()
         fastSeekDirection = direction
-        seek(to: currentTime + Double(direction) * 5)
+        let jump = Double(direction) * 5
+        let clock = ContinuousClock()
+        let holdDeadline = clock.now.advanced(by: .milliseconds(500))
+        skip(by: jump)
         fastSeekTask = Task { [weak self] in
             do {
-                try await Task.sleep(for: .milliseconds(800))
+                try await Task.sleep(until: holdDeadline, clock: clock)
                 try Task.checkCancellation()
                 self?.isFastSeeking = true
-                if direction > 0, self?.playbackRequested == true {
-                    if let rate = self?.playbackRate {
-                        self?.fastSeekRate = rate * 4
-                        self?.player.rate = rate * 4
-                    }
+                if mode == .shuttle, let item = self?.player.currentItem,
+                   direction > 0 ? item.canPlayFastForward : item.canPlayFastReverse {
+                    let rate: Float = direction > 0 ? 4 : -4
+                    self?.fastSeekRate = rate
+                    self?.player.rate = rate
                     return
                 }
-                // Reverse scrubbing must not compete with normal forward playback.
-                self?.fastSeekRate = 0
-                self?.player.pause()
+                if direction > 0, self?.playbackRequested == true {
+                    if let rate = self?.playbackRate {
+                        self?.fastSeekRate = rate
+                    }
+                } else {
+                    // Reverse jumps must not compete with forward decoding;
+                    // release restores the existing playback intent and rate.
+                    self?.fastSeekRate = 0
+                    self?.player.pause()
+                }
+                var nextTick = holdDeadline
                 while !Task.isCancelled {
                     guard let time = self?.currentTime, let duration = self?.duration,
                           direction < 0 ? time > 0 : time < duration else { return }
-                    self?.seek(to: time + Double(direction))
-                    try await Task.sleep(for: .milliseconds(200))
+                    guard let target = self?.skip(by: jump),
+                          direction < 0 ? target > 0 : target < duration else { return }
+                    // Anchor ticks to the press, so time spent handling a
+                    // seek does not get added to every 100 ms interval.
+                    nextTick = nextTick.advanced(by: .milliseconds(100))
+                    try await Task.sleep(until: nextTick, clock: clock)
                 }
             } catch { /* Releasing a key or closing playback cancels the hold. */ }
         }
@@ -683,6 +747,7 @@ final class PlayerModel: ObservableObject {
         historyCompleted = false
         requestedStartTime = nil
         mediaControls.detach()
+        wasPlayingInReverse = false
         playbackRequested = false
         endFastSeeking()
         loadIdentifier = UUID()
