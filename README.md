@@ -105,8 +105,10 @@ preparation. Test media remains local. See [the debugging review](DEBUG_REVIEW_8
 for the original eight areas, and [the core review](CORE_REVIEW_100.md) for the
 additional core area. See [the playback improvements review](PLAYBACK_IMPROVEMENTS_REVIEW.md)
 for the latest feature checks, results, and limitations.
-The [eight-area debugging refresh](DEBUG_REFRESH_REVIEW_800.md) records the latest
-800-scenario run, individually verified fixes, and its sanitized round ledger.
+The [eight-area debugging refresh](DEBUG_REFRESH_REVIEW_800.md) records its
+800-scenario run and individually verified fixes. The
+[eight-area follow-up](DEBUG_FOLLOWUP_REVIEW_800.md) records the latest fresh
+800-scenario pass, additional regressions, and its sanitized round ledger.
 Supported video resolutions and profiles still depend on the Mac's native decoder.
 Retagging is a compatibility workaround, not a general HEVC conversion: streams
 that depend on new parameter sets carried inside later frames may still fail.

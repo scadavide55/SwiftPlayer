@@ -125,7 +125,7 @@ final class PlayerModel: ObservableObject {
     private var fastSeekDirection: Int?
     private var fastSeekRate: Float?
     private var seekIdentifier = UUID()
-    private var isSeeking = false
+    private(set) var isSeeking = false
     
     init(preferences: PlayerPreferences? = nil, history: PlaybackHistoryStore? = nil) {
         let nativePlayer = AVPlayer()
@@ -379,7 +379,7 @@ final class PlayerModel: ObservableObject {
                 self.saveHistory(force: true, finished: true)
                 switch self.preferences?.afterPlayback ?? .stay {
                 case .stay: break
-                case .rewind: self.seek(to: 0)
+                case .rewind: self.seek(to: 0, preservingFinishedHistory: true)
                 case .repeatFile: self.play()
                 case .close:
                     self.teardown()
@@ -464,7 +464,7 @@ final class PlayerModel: ObservableObject {
         // the asynchronous step reaches its destination.
     }
 
-    func seek(to seconds: Double) {
+    func seek(to seconds: Double, preservingFinishedHistory: Bool = false) {
         guard seconds.isFinite, duration.isFinite, duration > 0,
               let item = player.currentItem, item.status == .readyToPlay else { return }
         let target = min(max(seconds, 0), duration)
@@ -474,6 +474,9 @@ final class PlayerModel: ObservableObject {
         isSeeking = true
         currentTime = target
         playbackFinished = false
+        // An explicit seek records its new position, while automatic rewind
+        // keeps the completion that was just saved for the finished file.
+        if !preservingFinishedHistory { historyCompleted = false }
         updateSubtitleDisplay()
         // Let AVFoundation choose a responsive seek position for ordinary playback.
         // Frame stepping uses the separate native step command.
