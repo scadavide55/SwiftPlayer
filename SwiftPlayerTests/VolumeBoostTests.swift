@@ -102,6 +102,23 @@ final class VolumeBoostTests: DebugMatrixTestCase {
         XCTAssertFalse(model.isMuted)
     }
 
+    func testRememberedZeroVolumeStartsWithConsistentMuteState() throws {
+        let (settings, defaults, name) = try preferences()
+        defer { defaults.removePersistentDomain(forName: name) }
+        settings.savedVolume = 0
+        settings.savedMute = false // Valid legacy settings from before zero-volume automute.
+        let model = PlayerModel(preferences: settings)
+        defer { model.teardown() }
+        XCTAssertEqual(model.volume, 0)
+        XCTAssertTrue(model.player.isMuted)
+        XCTAssertTrue(model.isMuted, "The mute button must reflect the native zero-volume mute state at startup.")
+        XCTAssertTrue(PlayerMenuState(model: model).snapshot.isMuted)
+        model.volumeUp()
+        XCTAssertEqual(model.volume, 0.05, accuracy: 0.001)
+        XCTAssertFalse(model.isMuted)
+        XCTAssertFalse(model.player.isMuted)
+    }
+
     private func renderedSamples(gain: Float, amplitude: Float, channels: AVAudioChannelCount,
                                  limiter: Bool = true, normalization: Bool = false, seconds: Double = 0.1) async throws -> [Float] {
         let source = directory.appendingPathComponent(UUID().uuidString + ".wav")
