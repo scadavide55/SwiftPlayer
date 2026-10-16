@@ -138,6 +138,8 @@ embedded font attachments are not implemented; unsupported effect tags produce
 a status message and drawing commands are not displayed as dialogue. Text
 fallback remains available by disabling file styling. External subtitle formats
 do not add MKV/container support or extraction of embedded unsupported tracks.
+See [the expanded subtitle review](EXPANDED_SUBTITLES_REVIEW.md) for supported
+behavior, individual checked commits, resource bounds, and remaining limits.
 
 ## Shared playback core
 
