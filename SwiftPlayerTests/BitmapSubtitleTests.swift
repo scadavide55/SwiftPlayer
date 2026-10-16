@@ -1,6 +1,7 @@
 import XCTest
 import AVFoundation
 import CoreGraphics
+import Darwin
 @testable import SwiftPlayer
 
 @MainActor
@@ -134,5 +135,81 @@ final class BitmapSubtitleTests: DebugMatrixTestCase {
         context.setFillColor(CGColor(gray: 0, alpha: 1)); context.fill(CGRect(x: 0, y: 0, width: 16, height: 9))
         let image = try XCTUnwrap(context.makeImage())
         XCTAssertNotEqual(try FrameCaptureImage.png(image, caption: nil), try FrameCaptureImage.png(image, caption: nil, subtitles: subtitle))
+    }
+
+    func testPGSParsingDrainsBuffersBetweenSegments() async throws {
+        let url = directory.appendingPathComponent("Generated-large.sup")
+        try autoreleasepool {
+            XCTAssertTrue(FileManager.default.createFile(atPath: url.path, contents: nil))
+            let file = try FileHandle(forWritingTo: url)
+            defer { try? file.close() }
+            let objectSize = 8 * 1024 * 1024
+            for _ in 0..<8 {
+                // Reset an undisplayed object each epoch so only the input-read
+                // buffers, rather than retained subtitle cues, can accumulate.
+                try file.write(contentsOf: presentation(objects: 0, time: 0))
+                var remaining = objectSize
+                var first = true
+                while remaining > 0 {
+                    let count = min(60_000, remaining)
+                    let flags: UInt8 = (first ? 0x80 : 0) | (count == remaining ? 0x40 : 0)
+                    let header = [UInt8(0), 1, 0, flags] + (first ? be(objectSize + 4, 3) + [8, 0, 8, 0] : [])
+                    try file.write(contentsOf: segment(0x15, header + [UInt8](repeating: 0, count: count), time: 0))
+                    remaining -= count
+                    first = false
+                }
+                try file.write(contentsOf: segment(0x80, [], time: 0))
+            }
+        }
+        let growth = try await Task.detached {
+            let before = try Self.footprint()
+            let cues = try PGSSubtitleParser.load(url)
+            let after = try Self.footprint()
+            XCTAssertTrue(cues.isEmpty)
+            return after > before ? after - before : 0
+        }.value
+        print("PGS_PARSE_MEMORY_GROWTH|\(growth)")
+        XCTAssertLessThan(growth, 32 * 1024 * 1024,
+                          "Discarded PGS segment buffers must not remain allocated for the entire parse.")
+    }
+
+    nonisolated private static func footprint() throws -> UInt64 {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+        let status = withUnsafeMutablePointer(to: &info) { pointer in
+            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        guard status == KERN_SUCCESS else { throw NSError(domain: NSMachErrorDomain, code: Int(status)) }
+        return info.phys_footprint
+    }
+
+    func testCancelBitmapRenderDuringRGBAConversionStopsTheWorker() async throws {
+        let width = 4096, height = 2048
+        // The index buffer costs 8 MiB; passing 16 MiB of growth identifies
+        // the subsequent RGBA conversion rather than the cancellable RLE pass.
+        let bytes = Data(Array(repeating: [UInt8(0), 0xd0, 0, 1, 0, 0], count: height).flatMap { $0 })
+        let bitmap = BitmapSubtitle(canvas: CGSize(width: width, height: height), parts: [
+            .init(bounds: CGRect(x: 0, y: 0, width: width, height: height), width: width, height: height,
+                  bytes: bytes, palette: [0, 0, 0, 0, 255, 255, 255, 255])])
+        let before = try Self.footprint()
+        let worker = Task.detached { try bitmap.render() }
+        defer { worker.cancel() }
+        do {
+            try await waitUntilCondition {
+                guard let bytes = try? Self.footprint(), bytes > before else { return false }
+                return bytes - before > 16 * 1024 * 1024
+            }
+        } catch {
+            worker.cancel()
+            _ = try? await worker.value
+            throw error
+        }
+        worker.cancel()
+        do {
+            _ = try await worker.value
+            XCTFail("A canceled RGBA conversion must stop rather than finishing the obsolete image.")
+        } catch is CancellationError { }
     }
 }

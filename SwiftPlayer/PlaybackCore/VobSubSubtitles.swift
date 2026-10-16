@@ -24,12 +24,14 @@ nonisolated struct VobSubIndex: Sendable {
             try Task.checkCancellation()
             let line = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             if line.hasPrefix("size:") {
-                let parts = line.dropFirst(5).split(separator: "x").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
-                guard parts.count == 2, parts.allSatisfy({ $0 > 0 && $0 <= 4096 }) else { throw SubtitleDecodingError.invalid }
+                let fields = line.dropFirst(5).split(separator: "x", omittingEmptySubsequences: false)
+                let parts = fields.compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+                guard fields.count == 2, parts.count == 2, parts.allSatisfy({ $0 > 0 && $0 <= 4096 }) else { throw SubtitleDecodingError.invalid }
                 result.canvas = CGSize(width: parts[0], height: parts[1])
             } else if line.hasPrefix("palette:") {
-                result.palette = line.dropFirst(8).split(separator: ",").compactMap { UInt32($0.trimmingCharacters(in: .whitespaces), radix: 16) }
-                guard result.palette.count == 16, result.palette.allSatisfy({ $0 <= 0xffffff }) else { throw SubtitleDecodingError.invalid }
+                let fields = line.dropFirst(8).split(separator: ",", omittingEmptySubsequences: false)
+                result.palette = fields.compactMap { UInt32($0.trimmingCharacters(in: .whitespaces), radix: 16) }
+                guard fields.count == 16, result.palette.count == 16, result.palette.allSatisfy({ $0 <= 0xffffff }) else { throw SubtitleDecodingError.invalid }
             } else if line.hasPrefix("langidx:") {
                 result.defaultTrack = Int(line.dropFirst(8).trimmingCharacters(in: .whitespaces)) ?? 0
             } else if line.hasPrefix("id:") {
@@ -59,8 +61,9 @@ nonisolated struct VobSubIndex: Sendable {
     }
 
     private static func timestamp(_ text: String) throws -> Double {
-        let values = text.split(separator: ":").compactMap { Int($0) }
-        guard values.count == 4, (0...999).contains(values[0]), (0..<60).contains(values[1]),
+        let fields = text.split(separator: ":", omittingEmptySubsequences: false)
+        let values = fields.compactMap { Int($0) }
+        guard fields.count == 4, values.count == 4, (0...999).contains(values[0]), (0..<60).contains(values[1]),
               (0..<60).contains(values[2]), (0..<1000).contains(values[3]) else { throw SubtitleDecodingError.invalid }
         return Double(values[0] * 3600 + values[1] * 60 + values[2]) + Double(values[3]) / 1000
     }
@@ -87,11 +90,15 @@ nonisolated enum VobSubParser {
             try file.seek(toOffset: entry.offset)
             let nextOffset = entryIndex + 1 < track.entries.count ? track.entries[entryIndex + 1].offset : length
             guard nextOffset > entry.offset, nextOffset <= length else { throw SubtitleDecodingError.invalid }
-            let data = try file.read(upToCount: Int(min(128 * 1024, nextOffset - entry.offset))) ?? Data()
-            readBytes += data.count
-            guard readBytes <= 1024 * 1024 * 1024 else { throw SubtitleDecodingError.limit }
-            let packet = try subpicture(data, stream: 0x20 + track.id)
-            let decoded = try decode(packet, at: entry.time, canvas: index.canvas, palette: index.palette)
+            let decoded = try autoreleasepool {
+                // Discard PES read/padding buffers between entries while keeping
+                // the decoded cue's independently owned compressed subpicture.
+                let data = try file.read(upToCount: Int(min(128 * 1024, nextOffset - entry.offset))) ?? Data()
+                readBytes += data.count
+                guard readBytes <= 1024 * 1024 * 1024 else { throw SubtitleDecodingError.limit }
+                let packet = try subpicture(data, stream: 0x20 + track.id)
+                return try decode(packet, at: entry.time, canvas: index.canvas, palette: index.palette)
+            }
             if let previous = cues.last, previous.end > entry.time { cues[cues.count - 1].end = entry.time }
             for cue in decoded { retainedBytes += cue.bitmap?.parts.reduce(0, { $0 + $1.bytes.count + $1.palette.count }) ?? 0 }
             cues += decoded

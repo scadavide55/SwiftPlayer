@@ -1,4 +1,5 @@
 import XCTest
+import Darwin
 @testable import SwiftPlayer
 
 @MainActor
@@ -65,6 +66,23 @@ final class VobSubSubtitleTests: DebugMatrixTestCase {
         cyclic[cyclic.count - 3] = 6
         XCTAssertThrowsError(try VobSubParser.decode(cyclic, at: 0, canvas: CGSize(width: 720, height: 480), palette: Array(repeating: 0, count: 16)))
     }
+
+    func testIndexRejectsInvalidOrEmptyNumericFieldsInsteadOfDroppingThem() throws {
+        let (idx, _) = try pair()
+        let original = try String(contentsOf: idx, encoding: .utf8)
+        let mutations = [
+            ("00:00:01:000", "00:bad:00:01:000"),
+            ("00:00:01:000", "00::00:01:000"),
+            ("size: 16x9", "size: 16xinvalidx9"),
+            ("size: 16x9", "size: 16xx9"),
+            ("palette:", "palette: invalid,"),
+            ("palette:", "palette: ,")
+        ]
+        for (field, malformed) in mutations {
+            try original.replacingOccurrences(of: field, with: malformed).write(to: idx, atomically: true, encoding: .utf8)
+            XCTAssertThrowsError(try VobSubIndex.load(idx), "Malformed numeric fields must not shift the remaining values.")
+        }
+    }
     func testPairedBookmarksRoundTripAndOldReferencesRemainCompatible() throws {
         let (idx, sub) = try pair()
         let reference = try XCTUnwrap(SubtitleFileReference.capture(idx, companion: sub, subtitleTrack: 1))
@@ -101,5 +119,52 @@ final class VobSubSubtitleTests: DebugMatrixTestCase {
         XCTAssertEqual(model.subtitleCues.first?.start, 2)
         model.currentTime = 2.1; model.updateSubtitleDisplay()
         try await waitUntilCondition { model.currentSubtitleImage != nil }
+    }
+
+    func testVobSubParsingDrainsDiscardedPacketReadBuffers() async throws {
+        let (idx, sub) = try pair()
+        try autoreleasepool {
+            let file = try FileHandle(forWritingTo: sub)
+            defer { try? file.close() }
+            let stride = 128 * 1024
+            try file.truncate(atOffset: UInt64(512 * stride))
+            let packet = pes(spu())
+            var index = "size: 16x9\npalette: " + Array(repeating: "ffffff", count: 16).joined(separator: ", ") + "\nid: en, index: 0\n"
+            for entry in 0..<512 {
+                try file.seek(toOffset: UInt64(entry * stride))
+                try file.write(contentsOf: packet)
+                index += String(format: "timestamp: 00:%02d:%02d:000, filepos: %09x\n", entry / 60, entry % 60, entry * stride)
+            }
+            try index.write(to: idx, atomically: true, encoding: .utf8)
+        }
+        let (growth, cues) = try await Task.detached {
+            let before = try Self.footprint()
+            let parsed = try VobSubParser.load(index: idx, companion: sub, track: 0, preferred: [])
+            let after = try Self.footprint()
+            return (after > before ? after - before : 0, parsed.cues)
+        }.value
+        XCTAssertEqual(cues.count, 512)
+        XCTAssertEqual(cues.first?.start, 0)
+        XCTAssertEqual(cues.last?.start, 511)
+        for cue in [cues.first, cues.last] {
+            let frame = try XCTUnwrap(cue?.bitmap).render()
+            XCTAssertEqual(frame.parts.first?.image.width, 2)
+            XCTAssertEqual(frame.parts.first?.image.height, 2)
+        }
+        print("VOBSUB_PARSE_MEMORY_GROWTH|\(growth)")
+        XCTAssertLessThan(growth, 32 * 1024 * 1024,
+                          "Reading padding between tiny subtitle packets must not retain the entire file.")
+    }
+
+    nonisolated private static func footprint() throws -> UInt64 {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+        let status = withUnsafeMutablePointer(to: &info) { pointer in
+            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        guard status == KERN_SUCCESS else { throw NSError(domain: NSMachErrorDomain, code: Int(status)) }
+        return info.phys_footprint
     }
 }
