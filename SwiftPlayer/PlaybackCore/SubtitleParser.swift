@@ -7,12 +7,20 @@ struct SubtitleCue: Sendable {
     var bitmap: BitmapSubtitle? = nil
 }
 
-nonisolated let supportedSubtitleExtensions: [String] = ["srt", "vtt", "ass", "ssa", "sup"]
+nonisolated let supportedSubtitleExtensions: [String] = ["srt", "vtt", "ass", "ssa", "sup", "idx", "sub"]
 
-nonisolated func parseSubtitles(from url: URL, encoding: SubtitleEncoding = .automatic) -> [SubtitleCue] {
+nonisolated func parseSubtitles(from url: URL, encoding: SubtitleEncoding = .automatic, companion: URL? = nil,
+                               track: Int? = nil, preferredLanguages: [String] = []) -> [SubtitleCue] {
     let scoped = url.startAccessingSecurityScopedResource()
-    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+    let companionScoped = companion?.startAccessingSecurityScopedResource() ?? false
+    defer {
+        if scoped { url.stopAccessingSecurityScopedResource() }
+        if companionScoped { companion?.stopAccessingSecurityScopedResource() }
+    }
     if url.pathExtension.lowercased() == "sup" { return (try? PGSSubtitleParser.load(url)) ?? [] }
+    if ["idx", "sub"].contains(url.pathExtension.lowercased()) {
+        return (try? VobSubParser.load(index: url, companion: companion, track: track, preferred: preferredLanguages).cues) ?? []
+    }
     guard !Task.isCancelled, let input = try? FileHandle(forReadingFrom: url) else { return [] }
     defer { try? input.close() }
     let maximumBytes = 16 * 1024 * 1024

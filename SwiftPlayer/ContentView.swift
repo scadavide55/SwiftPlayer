@@ -71,8 +71,9 @@ private struct PlayerContentView: View {
             SubtitleMatchesView(search: subtitleSearch) { model.loadSubtitles(url: $0.url, accessing: $0.folder) }
         }
         .sheet(item: $subtitleImport) { request in
-            SubtitleImportView(url: request.url, encoding: .automatic) { encoding in
-                model.loadSubtitles(url: request.url, encoding: encoding)
+            SubtitleImportView(url: request.url, encoding: .automatic, companion: request.companion,
+                               preferredLanguages: preferences.subtitleLanguage.isEmpty ? Locale.preferredLanguages : [preferences.subtitleLanguage]) { encoding, track in
+                model.loadSubtitles(url: request.url, encoding: encoding, companion: request.companion, track: track)
             }
         }
         .sheet(isPresented: $showJump) { JumpToTimeView(duration: model.duration) { model.seek(to: $0) } }
@@ -363,7 +364,20 @@ private struct PlayerContentView: View {
 
         if panel.runModal() == .OK, let url = panel.url {
             showSubtitlePanel = false
-            subtitleImport = SubtitleImportRequest(url: url)
+            var companion: URL?
+            if ["idx", "sub"].contains(url.pathExtension.lowercased()) {
+                let pair = NSOpenPanel()
+                let ext = url.pathExtension.lowercased() == "idx" ? "sub" : "idx"
+                pair.title = "Choose the Companion .\(ext) File"
+                pair.message = "VobSub subtitles require both the .idx index and .sub image file."
+                pair.directoryURL = url.deletingLastPathComponent()
+                pair.allowedContentTypes = [UTType(filenameExtension: ext)].compactMap { $0 }
+                pair.allowsMultipleSelection = false
+                pair.canChooseDirectories = false
+                guard pair.runModal() == .OK, let chosen = pair.url else { return }
+                companion = chosen
+            }
+            subtitleImport = SubtitleImportRequest(url: url, companion: companion)
         }
     }
 

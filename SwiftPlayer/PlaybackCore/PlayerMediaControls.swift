@@ -59,7 +59,7 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
     }
     @Published private(set) var subtitleStatusMessage = ""
     var onSubtitleDelayChanged: ((Double) -> Void)?
-    var onRestoreExternalSubtitles: ((URL) -> Void)?
+    var onRestoreExternalSubtitles: ((URL, URL?, Int?) -> Void)?
     private var captionTimeline = CaptionTimeline()
     private var externalReference: SubtitleFileReference?
     private var pendingMemory: MediaFileMemory?
@@ -273,7 +273,7 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
                 externalReference = memory.externalSubtitle
                 externalSubtitleName = url.lastPathComponent
                 subtitleSelection = "external"
-                onRestoreExternalSubtitles?(url)
+                onRestoreExternalSubtitles?(url, memory.externalSubtitle?.resolveCompanion(), memory.externalSubtitle?.subtitleTrack)
             } else {
                 subtitleStatusMessage = "The saved subtitle file is unavailable. Choose it again."
             }

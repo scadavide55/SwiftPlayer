@@ -38,6 +38,13 @@ nonisolated enum SubtitleMatching {
             guard let score = rank(candidate: url, media: media, preferredLanguages: preferredLanguages),
                   let resource = try? url.resourceValues(forKeys: Set(keys)),
                   resource.isRegularFile == true, resource.isSymbolicLink != true else { continue }
+            let ext = url.pathExtension.lowercased()
+            if ext == "sub" { continue } // Show the index once for a paired VobSub document.
+            if ext == "idx" {
+                let pair = url.deletingPathExtension().appendingPathExtension("sub")
+                guard let companion = try? pair.resourceValues(forKeys: Set(keys)),
+                      companion.isRegularFile == true, companion.isSymbolicLink != true else { continue }
+            }
             matches.append(SubtitleMatch(url: url, folder: folder, rank: score))
             if matches.count >= 128 { break }
         }

@@ -2,8 +2,10 @@ import Foundation
 
 struct SubtitleFileReference: Codable, Equatable, Sendable {
     let bookmark: Data
+    var companionBookmark: Data?
+    var subtitleTrack: Int?
 
-    nonisolated static func capture(_ url: URL) -> Self? {
+    nonisolated static func capture(_ url: URL, companion: URL? = nil, subtitleTrack: Int? = nil) -> Self? {
         guard url.isFileURL else { return nil }
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
@@ -14,7 +16,9 @@ struct SubtitleFileReference: Codable, Equatable, Sendable {
         #endif
         guard let data = try? url.bookmarkData(options: options, includingResourceValuesForKeys: nil, relativeTo: nil),
               data.count <= 16 * 1024 else { return nil }
-        return Self(bookmark: data)
+        let second = companion.flatMap { Self.capture($0)?.bookmark }
+        if companion != nil, second == nil { return nil }
+        return Self(bookmark: data, companionBookmark: second, subtitleTrack: subtitleTrack)
     }
 
     nonisolated func resolve() -> URL? {
@@ -28,6 +32,10 @@ struct SubtitleFileReference: Codable, Equatable, Sendable {
         guard let url = try? URL(resolvingBookmarkData: bookmark, options: options,
                                  relativeTo: nil, bookmarkDataIsStale: &stale), url.isFileURL else { return nil }
         return url
+    }
+
+    nonisolated func resolveCompanion() -> URL? {
+        companionBookmark.flatMap { Self(bookmark: $0).resolve() }
     }
 }
 
@@ -45,7 +53,9 @@ struct MediaFileMemory: Codable, Equatable {
         value.subtitleDelay = subtitleDelay.isFinite ? min(max(subtitleDelay, -30), 30) : 0
         if audioOption?.count ?? 0 > 16 * 1024 { value.audioOption = nil }
         if subtitleOption?.count ?? 0 > 16 * 1024 { value.subtitleOption = nil }
-        if externalSubtitle?.bookmark.count ?? 0 > 16 * 1024 { value.externalSubtitle = nil }
+        if externalSubtitle?.bookmark.count ?? 0 > 16 * 1024 || externalSubtitle?.companionBookmark?.count ?? 0 > 16 * 1024 {
+            value.externalSubtitle = nil
+        }
         return value
     }
 }

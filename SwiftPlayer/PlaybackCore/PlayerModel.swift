@@ -115,7 +115,7 @@ final class PlayerModel: ObservableObject {
     private var failureObserver: NSObjectProtocol?
     private var subtitleLoadTask: Task<Void, Never>?
     private var subtitleLoadIdentifier = UUID()
-    private var externalSubtitleLocation: (url: URL, folder: URL?)?
+    private var externalSubtitleLocation: (url: URL, folder: URL?, companion: URL?, track: Int?)?
     private var subtitleMaximumEnds: [Double] = []
     private var subtitleOrder: [Int] = []
     private var fastSeekTask: Task<Void, Never>?
@@ -133,9 +133,9 @@ final class PlayerModel: ObservableObject {
         mediaControls.onSubtitleDelayChanged = { [weak self] delay in
             if self?.subtitleOffset != delay { self?.subtitleOffset = delay }
         }
-        mediaControls.onRestoreExternalSubtitles = { [weak self] url in
+        mediaControls.onRestoreExternalSubtitles = { [weak self] url, companion, track in
             guard let self else { return }
-            self.loadSubtitles(url: url, encoding: self.mediaControls.externalSubtitleEncoding)
+            self.loadSubtitles(url: url, encoding: self.mediaControls.externalSubtitleEncoding, companion: companion, track: track)
         }
         if let preferences {
             audioProcessingObservation = preferences.$limitAudioPeaks.combineLatest(preferences.$normalizeAudio)
@@ -519,24 +519,29 @@ final class PlayerModel: ObservableObject {
 
     func reloadSubtitles(encoding: SubtitleEncoding) {
         guard let location = externalSubtitleLocation else { return }
-        loadSubtitles(url: location.url, accessing: location.folder, encoding: encoding, activate: false)
+        loadSubtitles(url: location.url, accessing: location.folder, encoding: encoding, activate: false, companion: location.companion, track: location.track)
     }
 
     func loadSubtitles(url: URL, accessing folder: URL? = nil,
-                       encoding: SubtitleEncoding = .automatic, activate: Bool = true) {
+                       encoding: SubtitleEncoding = .automatic, activate: Bool = true, companion: URL? = nil, track: Int? = nil) {
         subtitleLoadTask?.cancel()
         subtitleLoadIdentifier = UUID()
         let identifier = subtitleLoadIdentifier
         let selectionRevision = mediaControls.subtitleSelectionRevision
+        let languages = preferences?.subtitleLanguage.isEmpty == false ? [preferences!.subtitleLanguage] : Locale.preferredLanguages
+        let pair = ["idx", "sub"].contains(url.pathExtension.lowercased()) ? companion ?? url.deletingPathExtension().appendingPathExtension(url.pathExtension.lowercased() == "idx" ? "sub" : "idx") : nil
         subtitleLoadTask = Task { [weak self] in
             let worker = Task.detached(priority: .userInitiated) {
                 let folderScoped = folder?.startAccessingSecurityScopedResource() ?? false
                 let scoped = url.startAccessingSecurityScopedResource()
+                let pairScoped = pair?.startAccessingSecurityScopedResource() ?? false
                 defer {
                     if scoped { url.stopAccessingSecurityScopedResource() }
                     if folderScoped { folder?.stopAccessingSecurityScopedResource() }
+                    if pairScoped { pair?.stopAccessingSecurityScopedResource() }
                 }
-                return (parseSubtitles(from: url, encoding: encoding), SubtitleFileReference.capture(url))
+                return (parseSubtitles(from: url, encoding: encoding, companion: pair, track: track, preferredLanguages: languages),
+                        SubtitleFileReference.capture(url, companion: pair, subtitleTrack: track))
             }
             let (cues, reference) = await withTaskCancellationHandler {
                 await worker.value
@@ -550,7 +555,7 @@ final class PlayerModel: ObservableObject {
                 return
             }
             self.subtitleCues = cues
-            self.externalSubtitleLocation = (url, folder)
+            self.externalSubtitleLocation = (url, folder, pair, track)
             self.subtitlesEnabled = true
             self.mediaControls.useExternalSubtitles(named: url.lastPathComponent, reference: reference,
                 encoding: encoding, activate: activate && self.mediaControls.subtitleSelectionRevision == selectionRevision)

@@ -201,7 +201,7 @@ struct SubtitlesMenu: View {
         Picker("External Text Encoding", selection: Binding(get: { state.snapshot.subtitleEncoding },
             set: { state.model?.reloadSubtitles(encoding: $0) })) {
             ForEach(SubtitleEncoding.allCases) { Text($0.title).tag($0) }
-        }.disabled(state.snapshot.externalSubtitleName.isEmpty)
+        }.disabled(state.snapshot.externalSubtitleName.isEmpty || ["sup", "idx", "sub"].contains((state.snapshot.externalSubtitleName as NSString).pathExtension.lowercased()))
         LanguagePreferencePicker(title: "Preferred Language", selection: $preferences.subtitleLanguage)
         Divider()
         Button("Appearance and Fonts…", action: appearance)

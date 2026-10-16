@@ -15,7 +15,7 @@ A minimal, fully native video and audio player for macOS built with SwiftUI and 
 - **HEVC compatibility** – MP4/MOV/M4V files tagged `hev1` with VPS/SPS/PPS in their movie metadata open through a temporary `hvc1` compatibility copy. This preserves the original file, compressed video, audio, resolution, and quality. APFS uses a space-efficient clone; other volumes may require a full temporary copy. Temporary files are removed when playback closes or the file is replaced.
 - **Intuitive controls** – Play/pause, scrubber with time display, and keyboard shortcuts
 - **Pitch-preserving speed changes** – Playback uses AVFoundation's spectral time-pitch algorithm to keep voices and music at their original pitch as speed changes.
-- **Subtitle support** – Embedded text tracks plus SRT, VTT, ASS/SSA, and external PGS (`.sup`) files. PGS retains its image colors and positions, including in optional subtitle frame captures. Choose Off, Automatic, individual tracks, or an external file, and set a preferred language.
+- **Subtitle support** – Embedded text tracks plus SRT, VTT, ASS/SSA, external PGS (`.sup`), and VobSub (`.idx` + `.sub`) files. Image subtitles retain their colors and positions, including in optional subtitle frame captures. VobSub import offers its available languages and remembers the paired read-only file references. Choose Off, Automatic, individual tracks, or an external file, and set a preferred language.
 - **Subtitle appearance** – Choose a font, size, text color, outline, background opacity, and position with a live preview.
 - **Audio languages** – Select an audio track or use a preferred language automatically.
 - **Audio level controls** – Protect boosted peaks with a linked limiter, and optionally normalize quiet and loud passages. Peak protection is on by default; normalization is off.
@@ -121,6 +121,13 @@ caption is rendered, with at most 32 MiB of decoded image pixels. Image
 subtitles use their original colors and positions; font settings and text
 encoding do not apply. They follow subtitle delay, Off, seeking, and video
 scaling, and remain in the main window during Picture in Picture.
+VobSub import requests both the index and image file through the system file
+picker. Its language selector uses the subtitle-language preference while
+Automatic is selected. Authorized-folder matching lists the index once, only
+when its companion exists. Index files are limited to 2 MiB, image files to
+512 MiB, and each caption read to 128 KiB; compressed retention and active image
+limits match PGS. DVD 2-bit subpictures are supported. HD-DVD extensions,
+custom-palette overrides, and unsupported control commands are rejected.
 
 ## Shared playback core
 
