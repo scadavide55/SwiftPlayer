@@ -7,7 +7,7 @@ struct ControlsOverlay: View {
     var body: some View {
         HStack(spacing: 12) {
             Button {
-                model.seek(to: max(model.currentTime - 10, 0))
+                model.skip(by: -10)
             } label: {
                 Image(systemName: "gobackward.10")
                     .font(.system(size: 15))
@@ -28,7 +28,7 @@ struct ControlsOverlay: View {
             .buttonStyle(.plain)
             
             Button {
-                model.seek(to: min(model.currentTime + 10, model.duration))
+                model.skip(by: 10)
             } label: {
                 Image(systemName: "goforward.10")
                     .font(.system(size: 15))

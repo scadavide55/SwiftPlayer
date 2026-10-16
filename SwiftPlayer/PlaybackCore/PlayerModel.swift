@@ -464,7 +464,7 @@ final class PlayerModel: ObservableObject {
         // the asynchronous step reaches its destination.
     }
 
-    func seek(to seconds: Double, preservingFinishedHistory: Bool = false) {
+    func seek(to seconds: Double, preservingFinishedHistory: Bool = false, tolerance: Double? = nil) {
         guard seconds.isFinite, duration.isFinite, duration > 0,
               let item = player.currentItem, item.status == .readyToPlay else { return }
         let target = min(max(seconds, 0), duration)
@@ -478,9 +478,11 @@ final class PlayerModel: ObservableObject {
         // keeps the completion that was just saved for the finished file.
         if !preservingFinishedHistory { historyCompleted = false }
         updateSubtitleDisplay()
-        // Let AVFoundation choose a responsive seek position for ordinary playback.
-        // Frame stepping uses the separate native step command.
-        player.seek(to: CMTime(seconds: target, preferredTimescale: 600)) { [weak self, weak item] finished in
+        // Timeline seeks keep native tolerance. Relative navigation needs a
+        // small non-zero bound so a long GOP cannot swallow an entire jump.
+        let allowed = tolerance.map { CMTime(seconds: $0, preferredTimescale: 600) } ?? .positiveInfinity
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
+                    toleranceBefore: allowed, toleranceAfter: allowed) { [weak self, weak item] finished in
             Task { @MainActor [weak self, weak item] in
                 guard let self, let item, self.player.currentItem === item,
                       self.seekIdentifier == identifier else { return }
@@ -495,12 +497,21 @@ final class PlayerModel: ObservableObject {
         }
     }
 
+    @discardableResult
+    func skip(by seconds: Double) -> Double? {
+        guard seconds.isFinite, seconds != 0, duration.isFinite, duration > 0,
+              player.currentItem?.status == .readyToPlay else { return nil }
+        let target = min(max(currentTime + seconds, 0), duration)
+        seek(to: target, tolerance: min(0.25, abs(seconds) / 4))
+        return target
+    }
+
     func beginFastSeeking(direction: Int) {
         guard [-1, 1].contains(direction), player.currentItem?.status == .readyToPlay,
               fastSeekDirection != direction else { return }
         endFastSeeking()
         fastSeekDirection = direction
-        seek(to: currentTime + Double(direction) * 5)
+        skip(by: Double(direction) * 5)
         fastSeekTask = Task { [weak self] in
             do {
                 try await Task.sleep(for: .milliseconds(800))
@@ -519,7 +530,8 @@ final class PlayerModel: ObservableObject {
                 while !Task.isCancelled {
                     guard let time = self?.currentTime, let duration = self?.duration,
                           direction < 0 ? time > 0 : time < duration else { return }
-                    self?.seek(to: time + Double(direction))
+                    guard let target = self?.skip(by: Double(direction)),
+                          direction < 0 ? target > 0 : target < duration else { return }
                     try await Task.sleep(for: .milliseconds(200))
                 }
             } catch { /* Releasing a key or closing playback cancels the hold. */ }

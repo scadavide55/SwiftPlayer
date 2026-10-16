@@ -148,10 +148,10 @@ struct PlaybackMenu: View {
             }
         }.disabled(state.snapshot.chapters.isEmpty)
         Button("Back 10 Seconds") {
-            if let model = state.model { model.seek(to: model.currentTime - 10) }
+            state.model?.skip(by: -10)
         }.disabled(!state.snapshot.canNavigate)
         Button("Forward 10 Seconds") {
-            if let model = state.model { model.seek(to: model.currentTime + 10) }
+            state.model?.skip(by: 10)
         }.disabled(!state.snapshot.canNavigate)
         Button("Previous Frame") { state.model?.stepFrame(direction: -1) }
             .keyboardShortcut(.leftArrow, modifiers: [.control]).disabled(!state.snapshot.canStepBackward)
