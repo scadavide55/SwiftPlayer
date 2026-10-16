@@ -101,8 +101,9 @@ struct PlayerPreferencesView: View {
                         ForEach(EndOfPlaybackAction.allCases) { Text($0.title).tag($0) }
                     }
                     Toggle("Resume files from the last position", isOn: $preferences.resumePlayback)
-                    Text("Turning resume off clears saved playback positions.").font(.caption).foregroundStyle(.secondary)
+                    Text("Turning automatic resume off clears its saved positions. History progress is controlled separately.").font(.caption).foregroundStyle(.secondary)
                 }
+                PlaybackHistorySettings()
             }.formStyle(.grouped).tabItem { Label("General", systemImage: "gearshape") }
             SubtitleSearchSettingsView(preferences: preferences).tabItem { Label("Subtitle Files", systemImage: "folder") }
             SubtitleAppearanceView(preferences: preferences).tabItem { Label("Subtitle Appearance", systemImage: "textformat") }

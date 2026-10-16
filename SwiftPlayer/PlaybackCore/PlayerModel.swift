@@ -89,6 +89,10 @@ final class PlayerModel: ObservableObject {
     let player: AVPlayer
     let mediaControls: PlayerMediaControls
     private let preferences: PlayerPreferences?
+    private let history: PlaybackHistoryStore?
+    private var historySession: PlaybackHistoryStore.Session?
+    private var historyCompleted = false
+    private var requestedStartTime: Double?
     
     private var timeObserverToken: Any?
     private var itemStatusObservation: NSKeyValueObservation?
@@ -114,10 +118,11 @@ final class PlayerModel: ObservableObject {
     private var seekIdentifier = UUID()
     private var isSeeking = false
     
-    init(preferences: PlayerPreferences? = nil) {
+    init(preferences: PlayerPreferences? = nil, history: PlaybackHistoryStore? = nil) {
         let nativePlayer = AVPlayer()
         player = nativePlayer
         self.preferences = preferences
+        self.history = history
         mediaControls = PlayerMediaControls(player: nativePlayer, preferences: preferences)
         mediaControls.onSeek = { [weak self] time in self?.seek(to: time) }
         mediaControls.onSubtitleDelayChanged = { [weak self] delay in
@@ -163,6 +168,7 @@ final class PlayerModel: ObservableObject {
                 }
                 self.updateSubtitleDisplay()
                 self.mediaControls.tick(time: self.player.currentTime().seconds, duration: self.duration)
+                self.saveHistory()
             }
         }
         
@@ -196,8 +202,12 @@ final class PlayerModel: ObservableObject {
         // Background callbacks can arrive later; always read the latest rate.
         let rate = player.rate
         let requested = rate != 0
-        if playbackRequested != requested { playbackRequested = requested }
+        if playbackRequested != requested {
+            if !requested { saveHistory(force: true) }
+            playbackRequested = requested
+        }
         if requested {
+            historyCompleted = false
             playbackFinished = false
             if rate > 0, rate <= 4, playbackRate != rate { playbackRate = rate }
         }
@@ -228,8 +238,9 @@ final class PlayerModel: ObservableObject {
         scopedURL?.stopAccessingSecurityScopedResource()
     }
     
-    func load(url: URL) {
+    func load(url: URL, startAt: Double? = nil) {
         teardown()
+        requestedStartTime = startAt.flatMap { $0.isFinite && $0 >= 0 ? $0 : nil }
         sourceURL = url
         currentTime = 0
         duration = 0
@@ -296,7 +307,8 @@ final class PlayerModel: ObservableObject {
     }
 
     private func attach(_ item: AVPlayerItem, sourceURL: URL) {
-        mediaControls.attach(to: item, sourceURL: sourceURL)
+        mediaControls.attach(to: item, sourceURL: sourceURL, startAt: requestedStartTime)
+        requestedStartTime = nil
         // Preserve the original pitch for speech and music when playback speed
         // changes, including native controls and accelerated held-key playback.
         item.audioTimePitchAlgorithm = .spectral
@@ -316,6 +328,7 @@ final class PlayerModel: ObservableObject {
                     self.mediaControls.itemBecameReady(item)
                     let seconds = item.duration.seconds
                     if seconds.isFinite, seconds > 0 { self.duration = seconds }
+                    if self.historySession == nil { self.historySession = self.history?.begin(sourceURL, duration: self.duration) }
                     self.mediaControls.tick(time: self.player.currentTime().seconds, duration: self.duration)
                     if self.playbackRequested { self.player.rate = self.playbackRate }
                 } else if item.status == .failed {
@@ -339,6 +352,8 @@ final class PlayerModel: ObservableObject {
                 self.currentTime = self.duration
                 self.updateSubtitleDisplay()
                 self.playbackFinished = true
+                self.historyCompleted = true
+                self.saveHistory(force: true, finished: true)
                 switch self.preferences?.afterPlayback ?? .stay {
                 case .stay: break
                 case .rewind: self.seek(to: 0)
@@ -372,6 +387,7 @@ final class PlayerModel: ObservableObject {
     }
 
     func pause() {
+        saveHistory(force: true)
         mediaControls.savePosition()
         playbackRequested = false
         endFastSeeking()
@@ -381,6 +397,7 @@ final class PlayerModel: ObservableObject {
 
     func play() {
         guard isLoading || player.currentItem?.status == .readyToPlay else { return }
+        historyCompleted = false
         endFastSeeking()
         playbackRequested = true
         if playbackFinished || (duration > 0 && currentTime >= duration) { seek(to: 0) }
@@ -416,6 +433,7 @@ final class PlayerModel: ObservableObject {
                     let actual = self.player.currentTime().seconds
                     if actual.isFinite { self.currentTime = max(0, actual) }
                     self.updateSubtitleDisplay()
+                    if !self.playbackRequested, !self.isFastSeeking { self.saveHistory(force: true) }
                 }
             }
         }
@@ -531,6 +549,10 @@ final class PlayerModel: ObservableObject {
     }
     /// Call on window close / app termination to release decoder resources immediately.
     func teardown() {
+        saveHistory(force: true)
+        historySession = nil
+        historyCompleted = false
+        requestedStartTime = nil
         mediaControls.detach()
         playbackRequested = false
         endFastSeeking()
@@ -571,5 +593,12 @@ final class PlayerModel: ObservableObject {
         subtitlesEnabled = false
         subtitleOffset = 0
         currentSubtitleText = ""
+    }
+
+    private func saveHistory(force: Bool = false, finished: Bool = false) {
+        guard let session = historySession else { return }
+        let completed = finished || historyCompleted
+        history?.update(session, position: completed ? duration : player.currentTime().seconds, duration: duration,
+                        finished: completed, force: force)
     }
 }

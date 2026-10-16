@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 import AVFoundation
 
 struct ContentView: View {
-    @StateObject private var menuState = PlayerMenuState(model: PlayerModel(preferences: PlayerPreferences.shared))
+    @StateObject private var menuState = PlayerMenuState(model: PlayerModel(preferences: PlayerPreferences.shared, history: .shared))
 
     var body: some View {
         if let model = menuState.model {
@@ -31,6 +31,7 @@ private struct PlayerContentView: View {
     @State private var isPointerInside = false
     
     @State private var pendingReplacementURL: URL?
+    @State private var pendingReplacementPosition: Double?
     @State private var showReplaceConfirm: Bool = false
     
     @State private var isTargeted: Bool = false
@@ -40,6 +41,8 @@ private struct PlayerContentView: View {
     @State private var showAppearance = false
     @State private var showJump = false
     @State private var showInformation = false
+    @State private var showHistory = false
+    @State private var pendingHistoryOpen: (URL, Double)?
     @State private var activeSourceURL: URL?
     var body: some View {
         Group {
@@ -51,7 +54,8 @@ private struct PlayerContentView: View {
                 }
             }
         }
-        .background(PlayerCommandFocus(context: PlayerWindowContext(menus: menuState, viewing: windowControls, capture: frameCapture, open: requestOpen,
+        .background(PlayerCommandFocus(context: PlayerWindowContext(menus: menuState, viewing: windowControls, capture: frameCapture,
+            open: { requestOpen($0) }, history: { pendingHistoryOpen = nil; showHistory = true },
             jump: { showJump = true }, information: { showInformation = true },
             subtitles: openSubtitlePicker, findSubtitles: {
                 showSubtitleMatches = true
@@ -73,6 +77,13 @@ private struct PlayerContentView: View {
         }
         .sheet(isPresented: $showJump) { JumpToTimeView(duration: model.duration) { model.seek(to: $0) } }
         .sheet(isPresented: $showInformation) { MediaInformationView(model: model, media: model.mediaControls) }
+        .sheet(isPresented: $showHistory, onDismiss: {
+            guard let request = pendingHistoryOpen else { return }
+            pendingHistoryOpen = nil
+            requestOpen(request.0, startAt: request.1)
+        }) {
+            PlaybackHistoryView(history: .shared) { pendingHistoryOpen = ($0, $1) }
+        }
         .onChange(of: model.isLoading) { loading in
             if !loading, !model.playbackFailed, model.player.currentItem?.status == .readyToPlay, let url = activeSourceURL {
                 RecentMediaStore.shared.record(url)
@@ -105,15 +116,17 @@ private struct PlayerContentView: View {
                                          onWindowChanged: { windowControls.attach($0) }))
         .alert("Replace current video?", isPresented: $showReplaceConfirm, presenting: pendingReplacementURL) { url in
             Button("Replace", role: .destructive) {
-                load(url: url)
+                load(url: url, startAt: pendingReplacementPosition)
             }
             Button("Cancel", role: .cancel) {
                 pendingReplacementURL = nil
+                pendingReplacementPosition = nil
             }
         } message: { url in
             Text("This will stop the current playback and load “\(url.lastPathComponent)”.")
         }
         .onDisappear {
+            pendingHistoryOpen = nil
             displaySleep.detach()
             windowControls.detach()
             frameCapture.detach()
@@ -302,9 +315,11 @@ private struct PlayerContentView: View {
         model.isScrubbing || model.isLoading || model.playbackFailed || model.playbackFinished
             || showSubtitlePanel || showHomeConfirm || showReplaceConfirm || showAppearance || showJump || showInformation
             || subtitleImport != nil
+            || showHistory
     }
 
     private func goHome() {
+        pendingHistoryOpen = nil
         stopInteractions()
         pipController.detach()
         model.teardown()
@@ -313,6 +328,7 @@ private struct PlayerContentView: View {
         showSubtitlePanel = false
         subtitleImport = nil
         pendingReplacementURL = nil
+        pendingReplacementPosition = nil
     }
 
     private func toggleFullScreen() {
@@ -349,20 +365,24 @@ private struct PlayerContentView: View {
         }
     }
 
-    private func requestOpen(_ url: URL) {
+    private func requestOpen(_ url: URL, startAt: Double? = nil) {
         guard supportedExtensions.contains(url.pathExtension.lowercased()) else { return }
-        if hasLoadedFile { pendingReplacementURL = url; showReplaceConfirm = true }
-        else { load(url: url) }
+        if hasLoadedFile {
+            pendingReplacementURL = url
+            pendingReplacementPosition = startAt
+            showReplaceConfirm = true
+        } else { load(url: url, startAt: startAt) }
     }
 
-    private func load(url: URL) {
+    private func load(url: URL, startAt: Double? = nil) {
         subtitleImport = nil
         stopInteractions()
         pipController.stop()
         activeSourceURL = url
-        model.load(url: url)
+        model.load(url: url, startAt: startAt)
         hasLoadedFile = true
         pendingReplacementURL = nil
+        pendingReplacementPosition = nil
         registerActivity()
     }
     
@@ -377,6 +397,7 @@ private struct PlayerContentView: View {
             DispatchQueue.main.async {
                 if hasLoadedFile {
                     pendingReplacementURL = url
+                    pendingReplacementPosition = nil
                     showReplaceConfirm = true
                 } else {
                     load(url: url)

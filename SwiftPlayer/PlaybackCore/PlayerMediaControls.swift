@@ -85,6 +85,7 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
     private var sourceURL: URL?
     private var lastSavedTime: Double = 0
     private var pendingResume: Double?
+    private var explicitResume = false
 
     init(player: AVPlayer, preferences: PlayerPreferences?) {
         self.player = player
@@ -111,13 +112,14 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
 
     deinit { discoveryTask?.cancel() }
 
-    func attach(to item: AVPlayerItem, sourceURL: URL) {
+    func attach(to item: AVPlayerItem, sourceURL: URL, startAt: Double? = nil) {
         detach()
         restoringMemory = true
         self.item = item
         self.sourceURL = sourceURL
         pendingMemory = preferences?.mediaMemory(for: sourceURL)
-        pendingResume = preferences?.resumeTime(for: sourceURL)
+        explicitResume = startAt != nil
+        pendingResume = startAt ?? preferences?.resumeTime(for: sourceURL)
         subtitleSelection = preferences?.subtitlesByDefault == false ? "off" : "automatic"
         audioSelection = "automatic"
         subtitleDelay = pendingMemory?.subtitleDelay ?? 0
@@ -308,7 +310,10 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
         renderEmbeddedText(at: time)
         if let resume = pendingResume, duration > 0 {
             pendingResume = nil
-            if resume >= 5, resume < duration - 5 { onSeek?(resume) }
+            if explicitResume {
+                explicitResume = false
+                onSeek?(min(max(resume, 0), duration))
+            } else if resume >= 5, resume < duration - 5 { onSeek?(resume) }
         }
         if abs(time - lastSavedTime) >= 10 { savePosition(); lastSavedTime = time }
     }
@@ -333,6 +338,7 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
         item = nil
         sourceURL = nil
         pendingResume = nil
+        explicitResume = false
         lastSavedTime = 0
         subtitleGroup = nil
         audioGroup = nil
