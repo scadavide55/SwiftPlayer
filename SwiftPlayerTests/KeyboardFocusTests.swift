@@ -4,11 +4,39 @@ import AppKit
 
 @MainActor
 final class KeyboardFocusTests: XCTestCase {
+    func testDoublePressSelectsShuttleWithoutChangingSingleHoldsShiftOrNativeRepeat() throws {
+        let view = KeyEventHandlingView.KeyCatcherView()
+        defer { KeyEventHandlingView.dismantleNSView(view, coordinator: ()) }
+        var modes: [ArrowSeekMode] = []
+        view.onArrowDown = { _, mode in modes.append(mode) }
+        func send(_ code: UInt16, _ time: TimeInterval, up: Bool = false,
+                  repeatKey: Bool = false, flags: NSEvent.ModifierFlags = []) throws {
+            view.keyDown(with: try XCTUnwrap(NSEvent.keyEvent(with: up ? .keyUp : .keyDown,
+                location: .zero, modifierFlags: flags, timestamp: time, windowNumber: 0, context: nil,
+                characters: "", charactersIgnoringModifiers: "", isARepeat: repeatKey, keyCode: code)))
+        }
+        for (code, start): (UInt16, TimeInterval) in [(123, 0), (124, 3)] {
+            try send(code, start)
+            try send(code, start + 0.05, up: true)
+            try send(code, start + 0.1)
+            try send(code, start + 0.7, repeatKey: true)
+            try send(code, start + 0.8, up: true)
+        }
+        XCTAssertEqual(modes, [.jump, .shuttle, .jump, .shuttle])
+        try send(124, 6)
+        try send(124, 6.05, up: true)
+        try send(124, 6.1, flags: .shift)
+        XCTAssertEqual(modes.suffix(2), [.jump, .largeJump])
+        try send(124, 6.2, up: true)
+        try send(124, 8)
+        XCTAssertEqual(modes.last, .jump, "An old tap must not activate shuttle playback.")
+    }
+
     func testShiftRoutesSixTimesTheNormalJump() throws {
         let view = KeyEventHandlingView.KeyCatcherView()
         defer { KeyEventHandlingView.dismantleNSView(view, coordinator: ()) }
         var jumps: [Int] = []
-        view.onArrowDown = { direction, largeJump in jumps.append(direction * (largeJump ? 30 : 5)) }
+        view.onArrowDown = { direction, mode in jumps.append(direction * (mode == .largeJump ? 30 : 5)) }
         for (code, flags): (UInt16, NSEvent.ModifierFlags) in [(123, []), (124, []), (123, .shift), (124, .shift)] {
             let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags,
                 timestamp: 0, windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "",

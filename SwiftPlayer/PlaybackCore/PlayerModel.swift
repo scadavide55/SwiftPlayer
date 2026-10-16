@@ -9,6 +9,10 @@ let supportedExtensions: [String] = [
     "mp4", "mov", "m4v", "mp3", "m4a", "aac", "wav", "aiff", "caf"
 ] // audio containers
 
+enum ArrowSeekMode {
+    case jump, largeJump, shuttle
+}
+
 @MainActor
 final class PlayerModel: ObservableObject {
    
@@ -219,6 +223,13 @@ final class PlayerModel: ObservableObject {
         // notification arrives; retain its last non-zero direction.
         if rate != 0 { wasPlayingInReverse = rate < 0 }
         if isFastSeeking {
+            if rate == 0, (fastSeekRate ?? 0) < 0, player.currentTime().seconds < 0.1 {
+                // A held reverse shuttle has reached the start. Keep its
+                // original playback intent until release instead of treating
+                // the native boundary stop as a new Pause command.
+                fastSeekRate = 0
+                return
+            }
             // Ignore our own hold transport, but let native controls interrupt
             // it without restoring the old rate over the user's new command.
             guard rate != fastSeekRate else { return }
@@ -376,8 +387,12 @@ final class PlayerModel: ObservableObject {
                 if self.wasPlayingInReverse, self.player.currentTime().seconds < 0.1 {
                     // Reaching the beginning in reverse is not completion of
                     // the file and must not run forward end-of-file actions.
-                    self.playbackRequested = false
-                    self.endFastSeeking()
+                    if self.isFastSeeking, self.fastSeekDirection == -1 {
+                        self.fastSeekRate = 0
+                    } else {
+                        self.playbackRequested = false
+                        self.endFastSeeking()
+                    }
                     self.player.pause()
                     self.isPlaying = false
                     self.currentTime = 0
@@ -529,18 +544,25 @@ final class PlayerModel: ObservableObject {
         return target
     }
 
-    func beginFastSeeking(direction: Int, largeJump: Bool = false) {
+    func beginFastSeeking(direction: Int, mode: ArrowSeekMode = .jump) {
         guard [-1, 1].contains(direction), player.currentItem?.status == .readyToPlay,
               fastSeekDirection != direction else { return }
         endFastSeeking()
         fastSeekDirection = direction
-        let jump = Double(direction) * (largeJump ? 30 : 5)
+        let jump = Double(direction) * (mode == .largeJump ? 30 : 5)
         skip(by: jump)
         fastSeekTask = Task { [weak self] in
             do {
                 try await Task.sleep(for: .milliseconds(500))
                 try Task.checkCancellation()
                 self?.isFastSeeking = true
+                if mode == .shuttle, let item = self?.player.currentItem,
+                   direction > 0 ? item.canPlayFastForward : item.canPlayFastReverse {
+                    let rate: Float = direction > 0 ? 4 : -4
+                    self?.fastSeekRate = rate
+                    self?.player.rate = rate
+                    return
+                }
                 if direction > 0, self?.playbackRequested == true {
                     if let rate = self?.playbackRate {
                         self?.fastSeekRate = rate

@@ -51,8 +51,8 @@ final class MemoryDebugMatrixTests: DebugMatrixTestCase {
                     case 7:
                         let view = KeyEventHandlingView.KeyCatcherView()
                         view.onSpace = { [retained = model] in retained?.togglePlayPause() }
-                        view.onArrowDown = { [retained = model] direction, largeJump in
-                            retained?.beginFastSeeking(direction: direction, largeJump: largeJump)
+                        view.onArrowDown = { [retained = model] direction, mode in
+                            retained?.beginFastSeeking(direction: direction, mode: mode)
                         }
                         model = nil
                         XCTAssertFalse(released())

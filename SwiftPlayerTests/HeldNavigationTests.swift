@@ -37,7 +37,7 @@ final class HeldNavigationTests: DebugMatrixTestCase {
                         if (time - previous) * Double(direction) > length * 0.8 { jumps.append(began.duration(to: clock.now)) }
                         previous = time
                     }
-                    model.beginFastSeeking(direction: direction, largeJump: largeJump)
+                    model.beginFastSeeking(direction: direction, mode: largeJump ? .largeJump : .jump)
                     try await Task.sleep(until: began.advanced(by: .milliseconds(400)), clock: clock)
                     XCTAssertFalse(model.isFastSeeking)
                     XCTAssertEqual(jumps.count, 1)

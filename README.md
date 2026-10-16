@@ -263,6 +263,7 @@ Tested on: MacBook Air 2020 (Intel Core i3, dual-core) and MacBook Air M5 (2026)
 - **Space** – Play/pause
 - **Left/Right Arrow** – Jump back/forward 5 seconds immediately; holding waits 0.5 seconds, then repeats the jump every 0.1 seconds. Release preserves the playing/paused state and selected playback speed.
 - **Shift–Left/Right Arrow** – Use 30-second jumps (six times the normal length), with the same hold timing.
+- **Quick double press, then hold Left/Right** – Tap and release, then press the same arrow again within the Mac's double-click interval and hold. After 0.5 seconds, play backward/forward at 4× speed; release restores the previous playing/paused state and selected speed. Formats without native fast playback support use repeated 5-second jumps instead. Shift always selects 30-second jumps.
 - **Control–Left/Right Arrow** – Pause and step backward/forward one video frame
 - **Up/Down Arrow** – Adjust Mac system volume by 5 percentage points (0–100%)
 - **Option–Left/Right Arrow** – Display subtitles 0.1 seconds earlier/later
