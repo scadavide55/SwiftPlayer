@@ -206,9 +206,10 @@ nonisolated enum PGSSubtitleParser {
                 while r.remaining > 0 {
                     let i = Int(try r.byte()) * 4
                     let y = Double(try r.byte()) - 16, cr = Double(try r.byte()) - 128, cb = Double(try r.byte()) - 128
-                    colors[i] = UInt8(min(max((1.164 * y + 1.793 * cr).rounded(), 0), 255))
-                    colors[i + 1] = UInt8(min(max((1.164 * y - 0.213 * cb - 0.533 * cr).rounded(), 0), 255))
-                    colors[i + 2] = UInt8(min(max((1.164 * y + 2.112 * cb).rounded(), 0), 255))
+                    let sd = canvas.height > 0 && canvas.height <= 576
+                    colors[i] = UInt8(min(max((1.164 * y + (sd ? 1.596 : 1.793) * cr).rounded(), 0), 255))
+                    colors[i + 1] = UInt8(min(max((1.164 * y - (sd ? 0.392 : 0.213) * cb - (sd ? 0.813 : 0.533) * cr).rounded(), 0), 255))
+                    colors[i + 2] = UInt8(min(max((1.164 * y + (sd ? 2.017 : 2.112) * cb).rounded(), 0), 255))
                     colors[i + 3] = try r.byte()
                 }
                 palettes[id] = colors

@@ -15,9 +15,9 @@ final class BitmapSubtitleTests: DebugMatrixTestCase {
         segment(0x16, [0, 16, 0, 9, 0x10, 0, 0, state, 0, 0, UInt8(objects)] +
             (objects == 0 ? [] : [0, 1, 0, cropped ? 0x80 : 0, 0, 4, 0, 5] + (cropped ? [0, 1, 0, 0, 0, 1, 0, 2] : [])), time: time)
     }
-    private func fixture(cropped: Bool = false, fragmented: Bool = false) -> Data {
+    private func fixture(cropped: Bool = false, fragmented: Bool = false, color: [UInt8] = [1, 235, 128, 128, 255]) -> Data {
         var data = presentation(objects: 1, cropped: cropped)
-        data.append(segment(0x14, [0, 0, 1, 235, 128, 128, 255]))
+        data.append(segment(0x14, [0, 0] + color))
         let pixels: [UInt8] = [1, 1, 0, 0, 1, 1, 0, 0]
         if fragmented {
             data.append(segment(0x15, [0, 1, 0, 0x80] + be(pixels.count + 4, 3) + [0, 2, 0, 2] + Array(pixels.prefix(3))))
@@ -72,6 +72,21 @@ final class BitmapSubtitleTests: DebugMatrixTestCase {
         let huge = BitmapSubtitle(canvas: CGSize(width: 8192, height: 8192), parts: [
             .init(bounds: .zero, width: 8192, height: 8192, bytes: Data(), palette: [])])
         XCTAssertThrowsError(try huge.render())
+    }
+
+    func testPGSPaletteUsesSDAndHDColorMatrices() throws {
+        var data = fixture(color: [1, 81, 240, 90, 255])
+        var cues = try PGSSubtitleParser.load(write(data))
+        var frame = try XCTUnwrap(cues.first?.bitmap).render()
+        var rgba = try XCTUnwrap(frame.parts.first?.image.dataProvider?.data) as Data
+        XCTAssertGreaterThanOrEqual(rgba[0], 254)
+        XCTAssertEqual(rgba[1], 0, "SD PGS uses BT.601 rather than the HD BT.709 matrix")
+        XCTAssertEqual(rgba[2], 0)
+        data[15] = 0x04; data[16] = 0x38 // A 1080-line presentation selects BT.709.
+        cues = try PGSSubtitleParser.load(write(data))
+        frame = try XCTUnwrap(cues.first?.bitmap).render()
+        rgba = try XCTUnwrap(frame.parts.first?.image.dataProvider?.data) as Data
+        XCTAssertEqual(rgba[1], 24)
     }
 
     func testPGSModelDelayOffSeekReplacementAndCancellation() async throws {
