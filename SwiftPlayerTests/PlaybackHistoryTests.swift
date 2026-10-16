@@ -166,4 +166,24 @@ final class PlaybackHistoryTests: DebugMatrixTestCase {
         model.teardown()
         XCTAssertTrue(store.entries.first?.isFinished ?? false)
     }
+
+    func testManualSeekAfterCompletionUpdatesPausedContinuationPosition() async throws {
+        let store = PlaybackHistoryStore(defaults: defaults)
+        let model = PlayerModel(history: store)
+        defer { model.teardown() }
+        try await ready(model)
+        model.seek(to: model.duration - 0.1)
+        model.play()
+        try await waitUntilCondition { model.playbackFinished }
+        XCTAssertTrue(store.entries.first?.isFinished ?? false)
+        model.seek(to: 8)
+        try await waitUntilCondition { abs(model.player.currentTime().seconds - 8) < 0.1 }
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertFalse(model.playbackRequested)
+        XCTAssertFalse(model.playbackFinished)
+        XCTAssertFalse(try XCTUnwrap(store.entries.first).isFinished)
+        XCTAssertEqual(try XCTUnwrap(store.entries.first).continuePosition, 8, accuracy: 0.1)
+        model.teardown()
+        XCTAssertEqual(try XCTUnwrap(store.entries.first).continuePosition, 8, accuracy: 0.1)
+    }
 }
