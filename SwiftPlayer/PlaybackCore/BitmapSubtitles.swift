@@ -18,7 +18,6 @@ nonisolated struct SubtitleImagePart: Sendable {
 }
 
 nonisolated struct SubtitleImageFrame: Sendable {
-    let id = UUID()
     let canvas: CGSize
     let parts: [SubtitleImagePart]
 
