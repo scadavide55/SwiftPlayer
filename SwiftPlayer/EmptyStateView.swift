@@ -83,7 +83,7 @@ struct EmptyStateView: View {
     }
 }
 
-// MARK: - Info panel (edit the text below however you like)
+// MARK: - Version information
 
 struct InfoPanelView: View {
     var body: some View {
@@ -93,9 +93,9 @@ struct InfoPanelView: View {
                     .font(.system(size: 28))
                     .foregroundStyle(.blue)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("SwiftPlayer 2")
+                    Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "SwiftPlayer")
                         .font(.headline)
-                    Text("Version 2.1 Build 11")
+                    Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown") · Build \(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "Unknown")")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
