@@ -254,6 +254,10 @@ private struct PlayerContentView: View {
                       }
                 }
             
+            .overlay(alignment: .top) {
+                PlaybackFeedbackOverlay(model: model, media: model.mediaControls, systemVolume: systemVolume)
+                    .id(model.sourceURL)
+            }
             .alert("Couldn't play this file", isPresented: $model.playbackFailed) {
                             Button("OK") {
                                 goHome()

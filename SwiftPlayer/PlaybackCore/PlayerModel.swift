@@ -20,6 +20,7 @@ final class PlayerModel: ObservableObject {
     @Published var currentTime: Double = 0
     @Published var duration: Double = 0
     @Published var isScrubbing: Bool = false
+    @Published private(set) var navigationFeedbackIdentifier: UUID?
     @Published private(set) var sourceURL: URL?
     @Published var currentFileName: String = ""
     @Published var subtitleCues: [SubtitleCue] = [] {
@@ -499,6 +500,7 @@ final class PlayerModel: ObservableObject {
         isScrubbing = false
         playbackFinished = false
         historyCompleted = false
+        navigationFeedbackIdentifier = UUID()
         item.step(byCount: direction)
         // The existing native time observer updates position and captions when
         // the asynchronous step reaches its destination.
@@ -520,6 +522,7 @@ final class PlayerModel: ObservableObject {
         item.cancelPendingSeeks()
         isSeeking = true
         currentTime = target
+        navigationFeedbackIdentifier = UUID()
         playbackFinished = false
         // An explicit seek records its new position, while automatic rewind
         // keeps the completion that was just saved for the finished file.
@@ -797,6 +800,7 @@ final class PlayerModel: ObservableObject {
     /// Call on window close / app termination to release decoder resources immediately.
     func teardown() {
         resetRelativeNavigation()
+        navigationFeedbackIdentifier = nil
         cancelSubtitleImage()
         saveHistory(force: true)
         historySession = nil

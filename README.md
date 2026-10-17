@@ -36,6 +36,7 @@ A minimal, fully native video and audio player for macOS built with SwiftUI and 
 - **Minimal UI** – Clean interface that fades away when idle, keeps focus on your content
 - **Drag & drop** – Load media by dragging files directly onto the window
 - **Keyboard navigation** – Left/Right make 5-second jumps while playing or paused; rapid taps accumulate. Holds accelerate forward playback or step the paused/reverse timeline. Up/Down adjust Mac system volume by 5 percentage points, up to 100%, and Space plays/pauses. Shortcuts continue working after a player control takes focus and leave editable text fields alone.
+- **Playback feedback** – Jumps show time with milliseconds and an estimated, one-based frame number at the upper left. Volume adjustments show Mac system volume at the upper right. Each display fades after three seconds; repeat input restarts its timer, and held navigation stays visible until release. Frame estimates use nominal FPS and may differ from actual sample numbers in variable-rate video.
 - **Frame stepping** – Control–Left/Right pauses and steps the video backward/forward by one native frame. Playback → Previous Frame/Next Frame provides the same controls where supported.
 
 ## Supported Formats

@@ -29,3 +29,16 @@ func parsePlaybackTime(_ text: String) -> Double? {
 func formatPlaybackRate(_ rate: Float) -> String {
     String(format: "%g×", rate)
 }
+
+func formatNavigationTime(_ seconds: Double) -> String {
+    guard seconds.isFinite, seconds >= 0, seconds < Double(Int.max) / 1_000 else { return "0:00.000" }
+    let milliseconds = Int((seconds * 1_000).rounded())
+    return formatTime(Double(milliseconds / 1_000)) + String(format: ".%03d", milliseconds % 1_000)
+}
+
+func formatNavigationFrame(_ seconds: Double, frameRate: Double?) -> String {
+    guard seconds.isFinite, seconds >= 0, let rate = frameRate, rate.isFinite, rate > 0,
+          seconds * rate < Double(Int.max - 1) else { return "Frame —" }
+    // Nominal FPS cannot identify the exact sample index in variable-rate media.
+    return "Frame ≈ \(Int((seconds * rate).rounded(.down)) + 1)"
+}
