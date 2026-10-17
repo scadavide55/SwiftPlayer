@@ -467,14 +467,6 @@ final class PlayerModel: ObservableObject {
         if player.currentItem?.status == .readyToPlay { player.rate = playbackRate }
     }
     
-    func volumeUp() {
-        volume = min((volume * 1_000_000 + 50_000).rounded() / 1_000_000, maximumVolume)
-    }
-
-    func volumeDown() {
-        volume = max((volume * 1_000_000 - 50_000).rounded() / 1_000_000, 0)
-    }
-
     func canStepFrame(direction: Int) -> Bool {
         guard let item = player.currentItem, item.status == .readyToPlay,
               item.presentationSize.width > 0, item.presentationSize.height > 0 else { return false }

@@ -96,6 +96,8 @@ Unused-code checks use [Periphery](https://github.com/peripheryapp/periphery).
 Run `periphery scan` with the checked-in `.periphery.yml`, or
 `periphery scan --setup` to repeat guided setup. The configuration retains
 properties consumed by synthesized equality, including SwiftUI task identities.
+The [eight-division stale-code review](STALE_CODE_REVIEW.md) records manual
+reference checks, verified cleanups, and intentionally retained test helpers.
 
 To also verify decoding and seeking with a local 8192-pixel-wide video, set
 `TEST_RUNNER_SWIFTPLAYER_TEST_MEDIA` to its absolute path when running the tests.

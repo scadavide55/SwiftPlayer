@@ -122,9 +122,10 @@ final class ASSSubtitleTests: DebugMatrixTestCase {
         try await waitUntilCondition { !model.hasPendingSubtitleLoad }
         model.currentTime = 2; model.updateSubtitleDisplay()
         try await waitUntilCondition { model.currentSubtitleImage != nil }
-        let id = model.currentSubtitleImage?.id
+        let image = try XCTUnwrap(model.currentSubtitleImage?.parts.first?.image)
         model.updateSubtitleDisplay()
-        XCTAssertEqual(model.currentSubtitleImage?.id, id)
+        XCTAssertTrue(try XCTUnwrap(model.currentSubtitleImage?.parts.first?.image) === image,
+            "Repeated ticks must reuse the rendered styled subtitle")
         preferences.useSubtitleFileStyles = false
         try await waitUntilCondition { model.currentSubtitleImage == nil }
         XCTAssertEqual(model.currentSubtitleText, "First")

@@ -1,6 +1,5 @@
 import XCTest
 import AVFoundation
-import AppKit
 import Combine
 @testable import SwiftPlayer
 
@@ -43,43 +42,6 @@ final class VolumeBoostTests: DebugMatrixTestCase {
         XCTAssertTrue(observedLimits.allSatisfy { $0.isFinite && (1...4).contains($0) })
     }
 
-    func testVolumeKeysUseFivePercentStepsMuteAtZeroAndReachConfiguredMaximum() throws {
-        let (settings, defaults, name) = try preferences()
-        defer { defaults.removePersistentDomain(forName: name) }
-        settings.maximumVolume = 4
-        let model = PlayerModel(preferences: settings)
-        defer { model.teardown() }
-        let view = KeyEventHandlingView.KeyCatcherView()
-        view.onVolumeUp = { model.volumeUp() }
-        view.onVolumeDown = { model.volumeDown() }
-        defer { KeyEventHandlingView.dismantleNSView(view, coordinator: ()) }
-        func key(_ code: UInt16) throws {
-            view.keyDown(with: try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero,
-                modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
-                characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: code)))
-        }
-        model.volume = 0.333
-        model.volumeUp()
-        XCTAssertEqual(model.volume, 0.383, accuracy: 0.00001)
-        model.volume = 0
-        XCTAssertTrue(model.isMuted)
-        for step in 1...80 {
-            try key(126)
-            XCTAssertEqual(model.volume, Float(step) * 0.05, accuracy: 0.0001)
-            XCTAssertFalse(model.isMuted)
-        }
-        try key(126)
-        XCTAssertEqual(model.volume, 4)
-        for step in stride(from: 79, through: 0, by: -1) {
-            try key(125)
-            XCTAssertEqual(model.volume, Float(step) * 0.05, accuracy: 0.0001)
-        }
-        try key(125)
-        XCTAssertEqual(model.volume, 0)
-        XCTAssertTrue(model.isMuted)
-        XCTAssertTrue(model.player.isMuted)
-    }
-
     func testBoostSurvivesNativeMuteAndLoadReplacement() async throws {
         let model = PlayerModel()
         defer { model.teardown() }
@@ -111,9 +73,8 @@ final class VolumeBoostTests: DebugMatrixTestCase {
         defer { model.teardown() }
         XCTAssertEqual(model.volume, 0)
         XCTAssertTrue(model.player.isMuted)
-        XCTAssertTrue(model.isMuted, "The mute button must reflect the native zero-volume mute state at startup.")
-        XCTAssertTrue(PlayerMenuState(model: model).snapshot.isMuted)
-        model.volumeUp()
+        XCTAssertTrue(model.isMuted, "Core mute must reflect native zero-volume mute at startup.")
+        model.volume = 0.05
         XCTAssertEqual(model.volume, 0.05, accuracy: 0.001)
         XCTAssertFalse(model.isMuted)
         XCTAssertFalse(model.player.isMuted)

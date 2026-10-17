@@ -101,9 +101,10 @@ final class BitmapSubtitleTests: DebugMatrixTestCase {
         model.currentTime = 2; model.updateSubtitleDisplay()
         try await waitUntilCondition { model.currentSubtitleImage != nil }
         XCTAssertTrue(model.currentSubtitleText.isEmpty)
-        let first = model.currentSubtitleImage?.id
+        let first = try XCTUnwrap(model.currentSubtitleImage?.parts.first?.image)
         for _ in 0..<20 { model.updateSubtitleDisplay() }
-        XCTAssertEqual(model.currentSubtitleImage?.id, first)
+        XCTAssertTrue(try XCTUnwrap(model.currentSubtitleImage?.parts.first?.image) === first,
+            "Repeated ticks must reuse the rendered image")
         model.subtitleOffset = 2
         model.updateSubtitleDisplay()
         XCTAssertNil(model.currentSubtitleImage)

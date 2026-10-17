@@ -43,14 +43,13 @@ final class InteractionDebugMatrixTests: DebugMatrixTestCase {
                         view.keyUp(with: try key(variant % 2 == 0 ? 123 : 124, flags: flags[variant], up: true))
                         XCTAssertEqual(releases, 1)
                     case 3:
-                        let model = PlayerModel()
-                        model.volume = Float(variant) / 10
-                        view.onVolumeUp = { model.volumeUp() }
-                        view.onVolumeDown = { model.volumeDown() }
-                        view.keyDown(with: try key(126))
-                        XCTAssertEqual(model.volume, min(Float(variant) / 10 + 0.05, 1), accuracy: 0.001)
-                        view.keyDown(with: try key(125))
-                        XCTAssertEqual(model.volume, Float(variant) / 10, accuracy: 0.001)
+                        var steps = 0
+                        view.onVolumeUp = { steps += 1 }
+                        view.onVolumeDown = { steps -= 1 }
+                        for index in 0...variant { view.keyDown(with: try key(126, repeatKey: index > 0)) }
+                        XCTAssertEqual(steps, variant + 1)
+                        for index in 0...variant { view.keyDown(with: try key(125, repeatKey: index > 0)) }
+                        XCTAssertEqual(steps, 0)
                     case 4:
                         let flags: [NSEvent.ModifierFlags] = [.command, .control, .option, [.command, .shift], [.control, .shift],
                             [.option, .shift], [.command, .control], [.command, .option], [.control, .option], [.command, .control, .option]]
@@ -102,22 +101,23 @@ final class InteractionDebugMatrixTests: DebugMatrixTestCase {
                         second.sendEvent(try key(49))
                         XCTAssertEqual(otherPlays, 1)
                         let observer = PlayerWindowObserver.ObservingView()
-                        var fullscreen: [Bool] = []
+                        let controls = PlayerWindowControls()
+                        controls.attach(first)
+                        defer { controls.detach() }
                         var resigns = 0
-                        observer.onFullScreenChanged = { fullscreen.append($0) }
                         observer.onResignKey = { resigns += 1 }
                         view.addSubview(observer)
-                        fullscreen.removeAll()
                         for _ in 0...variant {
                             NotificationCenter.default.post(name: NSWindow.didEnterFullScreenNotification, object: second)
                             NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: second)
                         }
-                        XCTAssertTrue(fullscreen.isEmpty)
+                        XCTAssertFalse(controls.isFullScreen)
                         XCTAssertEqual(resigns, 0)
                         NotificationCenter.default.post(name: NSWindow.didEnterFullScreenNotification, object: first)
+                        XCTAssertTrue(controls.isFullScreen)
                         NotificationCenter.default.post(name: NSWindow.didExitFullScreenNotification, object: first)
+                        XCTAssertFalse(controls.isFullScreen)
                         NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: first)
-                        XCTAssertEqual(fullscreen, [true, false])
                         XCTAssertEqual(resigns, 1)
                         PlayerWindowObserver.dismantleNSView(observer, coordinator: ())
                         KeyEventHandlingView.dismantleNSView(other, coordinator: ())

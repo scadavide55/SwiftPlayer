@@ -10,7 +10,7 @@ final class PlayerMenuStateTests: XCTestCase {
         for _ in 0..<5 { await Task.yield() }
     }
 
-    func testPlaybackTicksAndCaptionDeliveryDoNotInvalidateMenus() async throws {
+    func testPlaybackTicksCaptionsAndApplicationMuteDoNotInvalidateMenus() async throws {
         let model = PlayerModel()
         defer { model.teardown() }
         let state = PlayerMenuState(model: model)
@@ -41,17 +41,16 @@ final class PlayerMenuStateTests: XCTestCase {
         XCTAssertEqual(state.snapshot.playbackRate, 1.25)
         model.isMuted = true
         await settle()
-        XCTAssertEqual(changes, 2)
-        XCTAssertTrue(state.snapshot.isMuted)
+        XCTAssertEqual(changes, 1, "Application mute is not a menu input in system-volume mode")
         model.mediaControls.subtitleSelection = "off"
         await settle()
-        XCTAssertEqual(changes, 3)
+        XCTAssertEqual(changes, 2)
         XCTAssertEqual(state.snapshot.subtitleSelection, "off")
         // Duplicate assignments are common during native state synchronization.
         model.playbackRate = 1.25
         model.isMuted = true
         await settle()
-        XCTAssertEqual(changes, 3)
+        XCTAssertEqual(changes, 2)
     }
 
     func testWindowTargetsRemainDistinctAndDoNotRetainClosedPlayers() async {
