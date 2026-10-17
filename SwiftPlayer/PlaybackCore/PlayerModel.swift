@@ -122,7 +122,6 @@ final class PlayerModel: ObservableObject {
     private var failureObserver: NSObjectProtocol?
     private var subtitleLoadTask: Task<Void, Never>?
     private var subtitleLoadIdentifier = UUID()
-    private var externalSubtitleLocation: (url: URL, folder: URL?, companion: URL?, track: Int?)?
     private var subtitleMaximumEnds: [Double] = []
     private var subtitleOrder: [Int] = []
     private var fastSeekTask: Task<Void, Never>?
@@ -694,13 +693,9 @@ final class PlayerModel: ObservableObject {
 
     var hasPendingSubtitleLoad: Bool { subtitleLoadTask != nil }
 
-    func reloadSubtitles(encoding: SubtitleEncoding) {
-        guard let location = externalSubtitleLocation else { return }
-        loadSubtitles(url: location.url, accessing: location.folder, encoding: encoding, activate: false, companion: location.companion, track: location.track)
-    }
-
     func loadSubtitles(url: URL, accessing folder: URL? = nil,
-                       encoding: SubtitleEncoding = .automatic, activate: Bool = true, companion: URL? = nil, track: Int? = nil) {
+                       encoding: SubtitleEncoding? = nil, activate: Bool = true, companion: URL? = nil, track: Int? = nil) {
+        let encoding = encoding ?? preferences?.defaultSubtitleEncoding ?? .automatic
         subtitleLoadTask?.cancel()
         subtitleLoadIdentifier = UUID()
         let identifier = subtitleLoadIdentifier
@@ -732,7 +727,6 @@ final class PlayerModel: ObservableObject {
                 return
             }
             self.subtitleCues = cues
-            self.externalSubtitleLocation = (url, folder, pair, track)
             self.subtitlesEnabled = true
             self.mediaControls.useExternalSubtitles(named: url.lastPathComponent, reference: reference,
                 encoding: encoding, activate: activate && self.mediaControls.subtitleSelectionRevision == selectionRevision)
@@ -858,7 +852,6 @@ final class PlayerModel: ObservableObject {
         subtitleLoadTask?.cancel()
         subtitleLoadTask = nil
         seekIdentifier = UUID()
-        externalSubtitleLocation = nil
         isSeeking = false
         itemStatusObservation = nil
         itemDurationObservation = nil

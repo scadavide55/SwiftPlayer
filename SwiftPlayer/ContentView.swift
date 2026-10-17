@@ -3,13 +3,26 @@ import AppKit
 import UniformTypeIdentifiers
 import AVFoundation
 
+/// Each explicit open gets its own identity, including duplicate URLs.
+struct PlayerOpenRequest: Codable, Hashable {
+    let id: UUID
+    let url: URL
+    let startAt: Double?
+    init(url: URL, startAt: Double? = nil) {
+        id = UUID()
+        self.url = url
+        self.startAt = startAt
+    }
+}
+
 struct ContentView: View {
+    var openRequest: PlayerOpenRequest? = nil
     @StateObject private var menuState = PlayerMenuState(model: PlayerModel(preferences: PlayerPreferences.shared,
         history: .shared, restoreApplicationVolume: false))
 
     var body: some View {
         if let model = menuState.model {
-            PlayerContentView(model: model, menuState: menuState)
+            PlayerContentView(model: model, menuState: menuState, openRequest: openRequest)
         }
     }
 }
@@ -17,6 +30,9 @@ struct ContentView: View {
 private struct PlayerContentView: View {
     @ObservedObject var model: PlayerModel
     let menuState: PlayerMenuState
+    let openRequest: PlayerOpenRequest?
+    @Environment(\.openWindow) private var openWindow
+    @State private var consumedOpenRequest = false
     @ObservedObject private var preferences = PlayerPreferences.shared
     @ObservedObject private var systemVolume = SystemVolumeController.shared
     @StateObject private var pipController = PiPController()
@@ -32,15 +48,9 @@ private struct PlayerContentView: View {
     @State private var hideTask: Task<Void, Never>?
     @State private var isPointerInside = false
     
-    @State private var pendingReplacementURL: URL?
-    @State private var pendingReplacementPosition: Double?
-    @State private var showReplaceConfirm: Bool = false
-    
     @State private var isTargeted: Bool = false
-    @State private var showHomeConfirm: Bool = false
     @State private var showSubtitlePanel: Bool = false
     @State private var subtitleImport: SubtitleImportRequest?
-    @State private var showAppearance = false
     @State private var showJump = false
     @State private var showInformation = false
     @State private var showHistory = false
@@ -62,18 +72,12 @@ private struct PlayerContentView: View {
             subtitles: openSubtitlePicker, findSubtitles: {
                 showSubtitleMatches = true
                 startSubtitleSearch(automatic: false)
-            }, appearance: { showAppearance = true })).equatable())
-        .sheet(isPresented: $showAppearance) {
-            VStack {
-                SubtitleAppearanceView(preferences: preferences)
-                Button("Done") { showAppearance = false }.keyboardShortcut(.defaultAction).padding(.bottom, 12)
-            }
-        }
+            })).equatable())
         .sheet(isPresented: $showSubtitleMatches) {
             SubtitleMatchesView(search: subtitleSearch) { model.loadSubtitles(url: $0.url, accessing: $0.folder) }
         }
         .sheet(item: $subtitleImport) { request in
-            SubtitleImportView(url: request.url, encoding: .automatic, companion: request.companion,
+            SubtitleImportView(url: request.url, encoding: preferences.defaultSubtitleEncoding, companion: request.companion,
                                preferredLanguages: preferences.subtitleLanguage.isEmpty ? Locale.preferredLanguages : [preferences.subtitleLanguage]) { encoding, track in
                 model.loadSubtitles(url: request.url, encoding: encoding, companion: request.companion, track: track)
             }
@@ -101,6 +105,10 @@ private struct PlayerContentView: View {
             if finished { frameCapture.cancel(); subtitleSearch.cancel() }
         }
         .onAppear {
+            if !consumedOpenRequest {
+                consumedOpenRequest = true
+                if let openRequest { load(url: openRequest.url, startAt: openRequest.startAt) }
+            }
             displaySleep.attach(model: model, preferences: preferences)
             windowControls.observe(model.player)
             frameCapture.attach(model: model, preferences: preferences, viewing: windowControls)
@@ -120,17 +128,6 @@ private struct PlayerContentView: View {
         } message: { Text(frameCapture.errorMessage ?? "") }
         .background(PlayerWindowObserver(onResignKey: { stopInteractions() },
                                          onWindowChanged: { windowControls.attach($0) }))
-        .alert("Replace current video?", isPresented: $showReplaceConfirm, presenting: pendingReplacementURL) { url in
-            Button("Replace", role: .destructive) {
-                load(url: url, startAt: pendingReplacementPosition)
-            }
-            Button("Cancel", role: .cancel) {
-                pendingReplacementURL = nil
-                pendingReplacementPosition = nil
-            }
-        } message: { url in
-            Text("This will stop the current playback and load “\(url.lastPathComponent)”.")
-        }
         .onDisappear {
             pendingHistoryOpen = nil
             displaySleep.detach()
@@ -217,43 +214,6 @@ private struct PlayerContentView: View {
 
                 if controlsVisible {
                     HStack(spacing: 10) {
-                        Button {
-                            showHomeConfirm = true
-                        } label: {
-                            Image(systemName: "house")
-                                .font(.system(size: 16))
-                                .foregroundStyle(.white)
-                                .frame(width: 32, height: 32)
-                                .background(Circle().fill(Color.black.opacity(0.4)))
-                        }
-                        .buttonStyle(.plain)
-                        .popover(isPresented: $showHomeConfirm, arrowEdge: .bottom) {
-                            VStack(spacing: 12) {
-                                Text("Go back to file select screen?")
-                                    .font(.callout)
-                                    .multilineTextAlignment(.center)
-                                    .frame(width: 220)
-
-                                VStack(spacing: 8) {
-                                    Button("Yes") {
-                                        showHomeConfirm = false
-                                        goHome()
-                                    }
-                                    .buttonStyle(.borderedProminent)
-                                    .tint(.blue)
-                                    .frame(maxWidth: .infinity)
-
-                                    Button("No") {
-                                        showHomeConfirm = false
-                                    }
-                                    .buttonStyle(.bordered)
-                                    .tint(.gray)
-                                    .frame(maxWidth: .infinity)
-                                }
-                            }
-                            .padding(16)
-                        }
-                        
                         Text(model.currentFileName)
                             .font(.caption)
                             .foregroundStyle(.white.opacity(0.7))
@@ -317,10 +277,7 @@ private struct PlayerContentView: View {
                                     .buttonStyle(.plain)
                                     .popover(isPresented: $showSubtitlePanel, arrowEdge: .bottom) {
                                         SubtitlePanel(model: model, media: model.mediaControls, preferences: preferences,
-                                                      openFile: openSubtitlePicker, appearance: {
-                                                          showSubtitlePanel = false
-                                                          showAppearance = true
-                                                      })
+                                                      openFile: openSubtitlePicker)
                                     }
                                 }
                                 .padding(16)
@@ -329,7 +286,7 @@ private struct PlayerContentView: View {
         }
     private var isInteracting: Bool {
         model.isScrubbing || model.isLoading || model.playbackFailed || model.playbackFinished
-            || showSubtitlePanel || showHomeConfirm || showReplaceConfirm || showAppearance || showJump || showInformation
+            || showSubtitlePanel || showJump || showInformation
             || subtitleImport != nil
             || showHistory
     }
@@ -343,8 +300,6 @@ private struct PlayerContentView: View {
         activeSourceURL = nil
         showSubtitlePanel = false
         subtitleImport = nil
-        pendingReplacementURL = nil
-        pendingReplacementPosition = nil
     }
 
     private func toggleFullScreen() {
@@ -362,7 +317,7 @@ private struct PlayerContentView: View {
 
     private func startSubtitleSearch(automatic: Bool) {
         subtitleSearch.cancel()
-        guard model.sourceURL != nil else { showSubtitleMatches = false; return }
+        guard model.sourceURL != nil, !model.isFinishedUnloaded else { showSubtitleMatches = false; return }
         guard !automatic || preferences.autoFindSubtitles else { return }
         let languages = preferences.subtitleLanguage.isEmpty ? Locale.preferredLanguages : [preferences.subtitleLanguage]
         subtitleSearch.start(model: model, folders: subtitleFolders.entries, languages: languages, automatic: automatic)
@@ -397,9 +352,7 @@ private struct PlayerContentView: View {
     private func requestOpen(_ url: URL, startAt: Double? = nil) {
         guard supportedExtensions.contains(url.pathExtension.lowercased()) else { return }
         if hasLoadedFile {
-            pendingReplacementURL = url
-            pendingReplacementPosition = startAt
-            showReplaceConfirm = true
+            openWindow(id: "player", value: PlayerOpenRequest(url: url, startAt: startAt))
         } else { load(url: url, startAt: startAt) }
     }
 
@@ -410,8 +363,6 @@ private struct PlayerContentView: View {
         activeSourceURL = url
         model.load(url: url, startAt: startAt)
         hasLoadedFile = true
-        pendingReplacementURL = nil
-        pendingReplacementPosition = nil
         registerActivity()
     }
     
@@ -424,13 +375,7 @@ private struct PlayerContentView: View {
             guard supportedExtensions.contains(ext) else { return }
             
             DispatchQueue.main.async {
-                if hasLoadedFile {
-                    pendingReplacementURL = url
-                    pendingReplacementPosition = nil
-                    showReplaceConfirm = true
-                } else {
-                    load(url: url)
-                }
+                requestOpen(url)
             }
         }
         return true

@@ -13,7 +13,6 @@ struct PlayerWindowContext: Equatable {
     let information: () -> Void
     let subtitles: () -> Void
     let findSubtitles: () -> Void
-    let appearance: () -> Void
 
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.menus === rhs.menus }
 }
@@ -45,22 +44,21 @@ struct PlayerCommands: Commands {
     @Environment(\.openWindow) private var openWindow
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("New Player Window") { openWindow(id: "player") }.keyboardShortcut("n")
-            Button("Open File…") { pickFile() }.keyboardShortcut("o").disabled(window == nil)
+            Button("Open File…") { pickFile() }.keyboardShortcut("o")
             Button("Playback History…") { window?.history() }
                 .keyboardShortcut("h", modifiers: [.command, .shift]).disabled(window == nil)
             Menu("Open Recent") {
                 if recent.entries.isEmpty { Text("No Recent Files") }
                 ForEach(recent.entries) { entry in
                     Button(entry.name) {
-                        do { window?.open(try recent.resolve(entry)) }
+                        do { open(try recent.resolve(entry)) }
                         catch {
                             let alert = NSAlert()
                             alert.messageText = "This recent file could not be opened."
                             alert.informativeText = "Use Open File to locate it again."
                             alert.runModal()
                         }
-                    }.disabled(window == nil)
+                    }
                 }
                 Divider()
                 Button("Clear Menu") { recent.clear() }.disabled(recent.entries.isEmpty)
@@ -79,19 +77,28 @@ struct PlayerCommands: Commands {
         }
         CommandMenu("Subtitles") {
             SubtitlesMenu(state: window?.menus ?? inactive, preferences: preferences,
-                          load: { window?.subtitles() }, find: { window?.findSubtitles() }, appearance: { window?.appearance() })
+                          load: { window?.subtitles() }, find: { window?.findSubtitles() })
                 .disabled(window == nil)
         }
         CommandGroup(after: .windowArrangement) {
             MediaInformationCommand(state: window?.menus ?? inactive, action: { window?.information() })
         }
     }
+    private func open(_ url: URL) {
+        if let window { window.open(url) }
+        else { openWindow(id: "player", value: PlayerOpenRequest(url: url)) }
+    }
     private func pickFile() {
         let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
+        panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
         panel.allowedContentTypes = supportedExtensions.compactMap { UTType(filenameExtension: $0) }
-        if panel.runModal() == .OK, let url = panel.url { window?.open(url) }
+        if panel.runModal() == .OK {
+            for (index, url) in panel.urls.enumerated() {
+                if index == 0 { open(url) }
+                else { openWindow(id: "player", value: PlayerOpenRequest(url: url)) }
+            }
+        }
     }
 }
 
@@ -114,6 +121,7 @@ struct VideoMenu: View {
             Toggle("Include Subtitles", isOn: $capture.includeSubtitles)
             Divider()
             Button("Save Frame…") { capture.saveFrame() }
+                .keyboardShortcut(KeyEquivalent("\u{F708}"), modifiers: [])
             Button("Copy Frame") { capture.copyFrame() }
             if capture.isCapturing { Text("Capturing Frame…") }
             else if !capture.statusMessage.isEmpty { Text(capture.statusMessage) }
@@ -165,11 +173,11 @@ struct AudioMenu: View {
     @ObservedObject var preferences: PlayerPreferences
     @ObservedObject private var systemVolume = SystemVolumeController.shared
     var body: some View {
+        LanguagePreferencePicker(title: "Preferred Language", selection: $preferences.audioLanguage)
         Picker("Audio Track", selection: Binding(get: { state.snapshot.audioSelection }, set: { state.model?.mediaControls.audioSelection = $0 })) {
             Text("Automatic").tag("automatic")
             ForEach(state.snapshot.audioTracks) { Text($0.name).tag($0.id) }
         }.disabled(state.snapshot.audioTracks.isEmpty)
-        LanguagePreferencePicker(title: "Preferred Language", selection: $preferences.audioLanguage)
         Divider()
         Toggle("Mute System Audio", isOn: Binding(get: { systemVolume.isMuted }, set: { systemVolume.setMuted($0) }))
             .disabled(!systemVolume.canSetMute)
@@ -183,8 +191,8 @@ struct SubtitlesMenu: View {
     @ObservedObject var preferences: PlayerPreferences
     let load: () -> Void
     let find: () -> Void
-    let appearance: () -> Void
     var body: some View {
+        LanguagePreferencePicker(title: "Preferred Language", selection: $preferences.subtitleLanguage)
         Picker("Subtitle Track", selection: Binding(get: { state.snapshot.subtitleSelection }, set: { state.model?.mediaControls.subtitleSelection = $0 })) {
             Text("Off").tag("off")
             Text("Automatic").tag("automatic")
@@ -195,13 +203,6 @@ struct SubtitlesMenu: View {
         }.disabled(!state.snapshot.hasMedia)
         Button("Load Subtitle File…", action: load).disabled(!state.snapshot.hasMedia)
         Button("Find Matching Subtitles…", action: find).disabled(!state.snapshot.hasMedia)
-        Picker("External Text Encoding", selection: Binding(get: { state.snapshot.subtitleEncoding },
-            set: { state.model?.reloadSubtitles(encoding: $0) })) {
-            ForEach(SubtitleEncoding.allCases) { Text($0.title).tag($0) }
-        }.disabled(state.snapshot.externalSubtitleName.isEmpty || ["sup", "idx", "sub"].contains((state.snapshot.externalSubtitleName as NSString).pathExtension.lowercased()))
-        LanguagePreferencePicker(title: "Preferred Language", selection: $preferences.subtitleLanguage)
-        Divider()
-        Button("Appearance and Fonts…", action: appearance)
         Divider()
         Button("Subtitles Earlier") { state.model?.subtitleOffset -= 0.1 }
             .keyboardShortcut(.leftArrow, modifiers: [.option]).disabled(!state.snapshot.hasMedia)

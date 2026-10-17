@@ -41,6 +41,11 @@ struct SubtitleAppearanceView: View {
     @ObservedObject var preferences: PlayerPreferences
     var body: some View {
         Form {
+            Picker("Default text encoding", selection: $preferences.defaultSubtitleEncoding) {
+                ForEach(SubtitleEncoding.allCases) { Text($0.title).tag($0) }
+            }
+            Text("Used when opening external subtitle files. The import preview lets you override it; remembered per-file choices take priority.")
+                .font(.caption).foregroundStyle(.secondary)
             Toggle("Use styles and positions from ASS/SSA files", isOn: $preferences.useSubtitleFileStyles)
             Text("Turn this off to use the font and appearance below for ASS/SSA text. Image subtitles retain their original appearance.")
                 .font(.caption).foregroundStyle(.secondary)

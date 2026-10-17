@@ -23,6 +23,9 @@ struct SubtitleAppearance: Codable, Equatable {
 final class PlayerPreferences: ObservableObject {
     static let shared = PlayerPreferences(defaults: .standard)
     private let defaults: UserDefaults
+    @Published var defaultSubtitleEncoding: SubtitleEncoding {
+        didSet { defaults.set(defaultSubtitleEncoding.rawValue, forKey: "defaultSubtitleEncoding") }
+    }
     @Published var subtitleLanguage: String { didSet { defaults.set(subtitleLanguage, forKey: "subtitleLanguage") } }
     @Published var audioLanguage: String { didSet { defaults.set(audioLanguage, forKey: "audioLanguage") } }
     @Published var subtitlesByDefault: Bool { didSet { defaults.set(subtitlesByDefault, forKey: "subtitlesByDefault") } }
@@ -68,6 +71,7 @@ final class PlayerPreferences: ObservableObject {
 
     init(defaults: UserDefaults) {
         self.defaults = defaults
+        defaultSubtitleEncoding = SubtitleEncoding(rawValue: defaults.string(forKey: "defaultSubtitleEncoding") ?? "") ?? .automatic
         subtitleLanguage = defaults.string(forKey: "subtitleLanguage") ?? ""
         audioLanguage = defaults.string(forKey: "audioLanguage") ?? ""
         subtitlesByDefault = defaults.object(forKey: "subtitlesByDefault") as? Bool ?? true
