@@ -59,7 +59,7 @@ final class PlayerMenuStateTests: XCTestCase {
         weak var weakModel = model
         weak var weakState = state
         func context(_ menus: PlayerMenuState) -> PlayerWindowContext {
-            PlayerWindowContext(menus: menus, viewing: PlayerWindowControls(), capture: FrameCaptureController(), open: { _ in }, history: {}, jump: {}, information: {}, subtitles: {}, findSubtitles: {}, appearance: {})
+            PlayerWindowContext(menus: menus, viewing: PlayerWindowControls(), capture: FrameCaptureController(), open: { _ in }, history: {}, jump: {}, information: {}, subtitles: {}, findSubtitles: {})
         }
         XCTAssertEqual(context(state!), context(state!))
         XCTAssertNotEqual(context(state!), context(PlayerMenuState(model: PlayerModel())))

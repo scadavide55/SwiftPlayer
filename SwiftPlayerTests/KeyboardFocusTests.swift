@@ -47,6 +47,28 @@ final class KeyboardFocusTests: XCTestCase {
         XCTAssertEqual(modes, [.jump, .jump, .shuttle, .shuttle])
     }
 
+    func testControlVerticalArrowsAdjustSpeedWithoutChangingVolume() throws {
+        let view = KeyEventHandlingView.KeyCatcherView()
+        defer { KeyEventHandlingView.dismantleNSView(view, coordinator: ()) }
+        let model = PlayerModel()
+        defer { model.teardown() }
+        var volumeChanges = 0
+        view.onSpeedChange = { model.adjustPlaybackSpeed(direction: $0) }
+        view.onVolumeUp = { volumeChanges += 1 }
+        view.onVolumeDown = { volumeChanges += 1 }
+        for (code, expected): (UInt16, Float) in [(126, 1.05), (126, 1.10), (126, 1.15), (125, 1.10)] {
+            view.keyDown(with: try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero,
+                modifierFlags: .control, timestamp: 0, windowNumber: 0, context: nil,
+                characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: code)))
+            XCTAssertEqual(model.playbackRate, expected, accuracy: 0.00001)
+        }
+        XCTAssertEqual(volumeChanges, 0)
+        for _ in 0..<100 { model.adjustPlaybackSpeed(direction: -1) }
+        XCTAssertEqual(model.playbackRate, 0.05)
+        for _ in 0..<100 { model.adjustPlaybackSpeed(direction: 1) }
+        XCTAssertEqual(model.playbackRate, 4)
+    }
+
     private func event(_ code: UInt16, window: NSWindow, up: Bool = false) throws -> NSEvent {
         try XCTUnwrap(NSEvent.keyEvent(with: up ? .keyUp : .keyDown, location: .zero, modifierFlags: [],
             timestamp: 0, windowNumber: window.windowNumber, context: nil, characters: "",

@@ -55,11 +55,10 @@ final class PlayerModel: ObservableObject {
     @Published var playbackFailed: Bool = false
     @Published var playbackErrorMessage: String = ""
     @Published var isLoading: Bool = false
-    @Published private(set) var closedAtEnd = false
     @Published var playbackFinished: Bool = false
     @Published var playbackRate: Float = 1.0 {
         didSet {
-            guard playbackRate.isFinite, playbackRate > 0, playbackRate <= 4 else {
+            guard playbackRate.isFinite, playbackRate >= 0.05, playbackRate <= 4 else {
                 playbackRate = oldValue
                 return
             }
@@ -123,7 +122,6 @@ final class PlayerModel: ObservableObject {
     private var failureObserver: NSObjectProtocol?
     private var subtitleLoadTask: Task<Void, Never>?
     private var subtitleLoadIdentifier = UUID()
-    private var externalSubtitleLocation: (url: URL, folder: URL?, companion: URL?, track: Int?)?
     private var subtitleMaximumEnds: [Double] = []
     private var subtitleOrder: [Int] = []
     private var fastSeekTask: Task<Void, Never>?
@@ -134,6 +132,14 @@ final class PlayerModel: ObservableObject {
     private(set) var isSeeking = false
     private var relativeSeekTarget: CMTime?
     private var relativeSeekLanding: CMTime?
+    private struct ReloadSeek {
+        let target: Double
+        let tolerance: Double?
+        let relativeTarget: CMTime?
+    }
+    private var reloadSeek: ReloadSeek?
+    var isFinishedUnloaded: Bool { playbackFinished && player.currentItem == nil && sourceURL != nil }
+
     
     init(preferences: PlayerPreferences? = nil, history: PlaybackHistoryStore? = nil,
          restoreApplicationVolume: Bool = true) {
@@ -142,7 +148,13 @@ final class PlayerModel: ObservableObject {
         self.preferences = preferences
         self.history = history
         mediaControls = PlayerMediaControls(player: nativePlayer, preferences: preferences)
-        mediaControls.onSeek = { [weak self] time in self?.seek(to: time) }
+        mediaControls.onSeek = { [weak self] time in
+            guard let self else { return }
+            if let pending = self.reloadSeek {
+                self.reloadSeek = nil
+                self.performSeek(to: pending.target, tolerance: pending.tolerance, relativeTarget: pending.relativeTarget)
+            } else { self.seek(to: time) }
+        }
         mediaControls.onSubtitleDelayChanged = { [weak self] delay in
             if self?.subtitleOffset != delay { self?.subtitleOffset = delay }
         }
@@ -154,9 +166,9 @@ final class PlayerModel: ObservableObject {
             subtitleStyleObservation = preferences.$useSubtitleFileStyles.dropFirst().sink { [weak self] _ in
                 Task { @MainActor [weak self] in self?.cancelSubtitleImage(); self?.updateSubtitleDisplay() }
             }
-            audioProcessingObservation = preferences.$limitAudioPeaks.combineLatest(preferences.$normalizeAudio)
-                .sink { [weak self] limiter, normalization in
-                    self?.audioGain.configure(limiter: limiter, normalization: normalization)
+            audioProcessingObservation = preferences.$limitAudioPeaks
+                .sink { [weak self] limiter in
+                    self?.audioGain.configure(limiter: limiter)
                 }
         }
         maximumVolume = preferences?.maximumVolume ?? 2
@@ -180,7 +192,7 @@ final class PlayerModel: ObservableObject {
         let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
         timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                guard let self, self.player.currentItem != nil else { return }
                 if !self.isScrubbing, !self.isSeeking, self.player.currentItem != nil {
                     // Read current state when this callback reaches the main actor;
                     // its supplied timestamp may belong to an item already replaced.
@@ -416,12 +428,8 @@ final class PlayerModel: ObservableObject {
                 self.historyCompleted = true
                 self.saveHistory(force: true, finished: true)
                 switch self.preferences?.afterPlayback ?? .stay {
-                case .stay: break
-                case .rewind: self.seek(to: 0, preservingFinishedHistory: true)
+                case .stay: self.unloadFinishedMedia()
                 case .repeatFile: self.play()
-                case .close:
-                    self.teardown()
-                    self.closedAtEnd = true
                 }
             }
         }
@@ -458,6 +466,10 @@ final class PlayerModel: ObservableObject {
     }
 
     func play() {
+        if isFinishedUnloaded, let url = sourceURL {
+            load(url: url, startAt: 0)
+            return
+        }
         guard isLoading || player.currentItem?.status == .readyToPlay else { return }
         resetRelativeNavigation()
         historyCompleted = false
@@ -467,6 +479,13 @@ final class PlayerModel: ObservableObject {
         if player.currentItem?.status == .readyToPlay { player.rate = playbackRate }
     }
     
+    /// Round on the 1/20 grid so repeated shortcuts do not accumulate Float error.
+    func adjustPlaybackSpeed(direction: Int) {
+        guard direction == -1 || direction == 1 else { return }
+        let step = Int((Double(playbackRate) * 20).rounded()) + direction
+        playbackRate = Float(min(max(step, 1), 80)) / 20
+    }
+
     func canStepFrame(direction: Int) -> Bool {
         guard let item = player.currentItem, item.status == .readyToPlay,
               item.presentationSize.width > 0, item.presentationSize.height > 0 else { return false }
@@ -498,15 +517,29 @@ final class PlayerModel: ObservableObject {
         // the asynchronous step reaches its destination.
     }
 
-    func seek(to seconds: Double, preservingFinishedHistory: Bool = false, tolerance: Double? = nil) {
-        performSeek(to: seconds, preservingFinishedHistory: preservingFinishedHistory, tolerance: tolerance)
+    func seek(to seconds: Double, tolerance: Double? = nil) {
+        performSeek(to: seconds, tolerance: tolerance)
     }
 
-    private func performSeek(to seconds: Double, preservingFinishedHistory: Bool = false,
-                             tolerance: Double?, relativeTarget: CMTime? = nil) {
-        guard seconds.isFinite, duration.isFinite, duration > 0,
-              let item = player.currentItem, item.status == .readyToPlay else { return }
+    private func performSeek(to seconds: Double, tolerance: Double?, relativeTarget: CMTime? = nil) {
+        guard seconds.isFinite, duration.isFinite, duration > 0 else { return }
         let target = min(max(seconds, 0), duration)
+        if isFinishedUnloaded || (reloadSeek != nil && isLoading) {
+            if isFinishedUnloaded, let url = sourceURL {
+                let savedDuration = duration
+                load(url: url, startAt: target)
+                pause()
+                duration = savedDuration
+            }
+            reloadSeek = ReloadSeek(target: target, tolerance: tolerance, relativeTarget: relativeTarget)
+            relativeSeekTarget = relativeTarget
+            currentTime = target
+            isSeeking = true
+            playbackFinished = false
+            navigationFeedbackIdentifier = UUID()
+            return
+        }
+        guard let item = player.currentItem, item.status == .readyToPlay else { return }
         relativeSeekTarget = relativeTarget
         relativeSeekLanding = nil
         seekIdentifier = UUID()
@@ -516,9 +549,7 @@ final class PlayerModel: ObservableObject {
         currentTime = target
         navigationFeedbackIdentifier = UUID()
         playbackFinished = false
-        // An explicit seek records its new position, while automatic rewind
-        // keeps the completion that was just saved for the finished file.
-        if !preservingFinishedHistory { historyCompleted = false }
+        historyCompleted = false
         updateSubtitleDisplay()
         // Timeline seeks keep native tolerance. Discrete taps use a tight
         // bound; continuous held-key repeats allow more decoder flexibility.
@@ -548,10 +579,10 @@ final class PlayerModel: ObservableObject {
     @discardableResult
     func skip(by seconds: Double, precise: Bool = true) -> Double? {
         guard seconds.isFinite, seconds != 0, duration.isFinite, duration > 0,
-              player.currentItem?.status == .readyToPlay else { return nil }
+              (player.currentItem?.status == .readyToPlay || isFinishedUnloaded || reloadSeek != nil) else { return nil }
         let clock = player.currentTime()
         if !precise {
-            let base = isSeeking || isScrubbing || !clock.seconds.isFinite ? currentTime : clock.seconds
+            let base = isSeeking || isScrubbing || isFinishedUnloaded || !clock.seconds.isFinite ? currentTime : clock.seconds
             let target = min(max(base + seconds, 0), duration)
             seek(to: target, tolerance: min(0.25, abs(seconds) / 4))
             return target
@@ -559,7 +590,7 @@ final class PlayerModel: ObservableObject {
         let base: CMTime
         if isScrubbing {
             base = CMTime(seconds: currentTime, preferredTimescale: 600_000)
-        } else if isSeeking || !clock.seconds.isFinite {
+        } else if isSeeking || isFinishedUnloaded || !clock.seconds.isFinite {
             base = relativeSeekTarget ?? CMTime(seconds: currentTime, preferredTimescale: 600_000)
         } else if !playbackRequested, player.rate == 0,
                   let requested = relativeSeekTarget, let landed = relativeSeekLanding,
@@ -594,7 +625,8 @@ final class PlayerModel: ObservableObject {
     }
 
     func beginFastSeeking(direction: Int, mode: ArrowSeekMode = .jump) {
-        guard [-1, 1].contains(direction), player.currentItem?.status == .readyToPlay,
+        guard [-1, 1].contains(direction),
+              (player.currentItem?.status == .readyToPlay || isFinishedUnloaded || reloadSeek != nil),
               fastSeekDirection != direction else { return }
         endFastSeeking()
         fastSeekDirection = direction
@@ -661,13 +693,9 @@ final class PlayerModel: ObservableObject {
 
     var hasPendingSubtitleLoad: Bool { subtitleLoadTask != nil }
 
-    func reloadSubtitles(encoding: SubtitleEncoding) {
-        guard let location = externalSubtitleLocation else { return }
-        loadSubtitles(url: location.url, accessing: location.folder, encoding: encoding, activate: false, companion: location.companion, track: location.track)
-    }
-
     func loadSubtitles(url: URL, accessing folder: URL? = nil,
-                       encoding: SubtitleEncoding = .automatic, activate: Bool = true, companion: URL? = nil, track: Int? = nil) {
+                       encoding: SubtitleEncoding? = nil, activate: Bool = true, companion: URL? = nil, track: Int? = nil) {
+        let encoding = encoding ?? preferences?.defaultSubtitleEncoding ?? .automatic
         subtitleLoadTask?.cancel()
         subtitleLoadIdentifier = UUID()
         let identifier = subtitleLoadIdentifier
@@ -699,7 +727,6 @@ final class PlayerModel: ObservableObject {
                 return
             }
             self.subtitleCues = cues
-            self.externalSubtitleLocation = (url, folder, pair, track)
             self.subtitlesEnabled = true
             self.mediaControls.useExternalSubtitles(named: url.lastPathComponent, reference: reference,
                 encoding: encoding, activate: activate && self.mediaControls.subtitleSelectionRevision == selectionRevision)
@@ -790,7 +817,23 @@ final class PlayerModel: ObservableObject {
         if clear, currentSubtitleImage != nil { currentSubtitleImage = nil }
     }
     /// Call on window close / app termination to release decoder resources immediately.
-    func teardown() {
+    private func unloadFinishedMedia() {
+        let context = (sourceURL, currentFileName, duration, historySession)
+        teardown(preservingInformation: true)
+        sourceURL = context.0
+        currentFileName = context.1
+        duration = context.2
+        currentTime = context.2
+        historySession = context.3
+        historyCompleted = true
+        playbackFinished = true
+    }
+
+    func teardown(preservingInformation: Bool = false) {
+        if isFinishedUnloaded, let sourceURL {
+            preferences?.savePosition(duration, duration: duration, for: sourceURL)
+        }
+        reloadSeek = nil
         resetRelativeNavigation()
         navigationFeedbackIdentifier = nil
         cancelSubtitleImage()
@@ -798,7 +841,7 @@ final class PlayerModel: ObservableObject {
         historySession = nil
         historyCompleted = false
         requestedStartTime = nil
-        mediaControls.detach()
+        mediaControls.detach(preservingInformation: preservingInformation)
         wasPlayingInReverse = false
         playbackRequested = false
         endFastSeeking()
@@ -809,7 +852,6 @@ final class PlayerModel: ObservableObject {
         subtitleLoadTask?.cancel()
         subtitleLoadTask = nil
         seekIdentifier = UUID()
-        externalSubtitleLocation = nil
         isSeeking = false
         itemStatusObservation = nil
         itemDurationObservation = nil
@@ -827,7 +869,6 @@ final class PlayerModel: ObservableObject {
         isPlaying = false
         isLoading = false
         playbackFinished = false
-        closedAtEnd = false
         playbackFailed = false
         playbackErrorMessage = ""
         isScrubbing = false

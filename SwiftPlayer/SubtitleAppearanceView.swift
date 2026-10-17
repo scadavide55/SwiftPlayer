@@ -41,6 +41,11 @@ struct SubtitleAppearanceView: View {
     @ObservedObject var preferences: PlayerPreferences
     var body: some View {
         Form {
+            Picker("Default text encoding", selection: $preferences.defaultSubtitleEncoding) {
+                ForEach(SubtitleEncoding.allCases) { Text($0.title).tag($0) }
+            }
+            Text("Used when opening external subtitle files. The import preview lets you override it; remembered per-file choices take priority.")
+                .font(.caption).foregroundStyle(.secondary)
             Toggle("Use styles and positions from ASS/SSA files", isOn: $preferences.useSubtitleFileStyles)
             Text("Turn this off to use the font and appearance below for ASS/SSA text. Image subtitles retain their original appearance.")
                 .font(.caption).foregroundStyle(.secondary)
@@ -89,8 +94,7 @@ struct PlayerPreferencesView: View {
                     Text("The volume keys and slider control Mac system volume for all apps, from 0% to 100%.")
                         .font(.caption).foregroundStyle(.secondary)
                     Toggle("Protect audio peaks", isOn: $preferences.limitAudioPeaks)
-                    Toggle("Normalize audio level", isOn: $preferences.normalizeAudio)
-                    Text("Normalization balances quiet and loud passages. Peak protection reduces distortion during processing.")
+                    Text("Peak protection reduces digital peaks and clipping. Output loudness also depends on Mac system volume and the connected speakers or headphones.")
                         .font(.caption).foregroundStyle(.secondary)
                     Toggle("Remember tracks and subtitle timing for each file", isOn: $preferences.rememberFileSettings)
                     Picker("After playback", selection: $preferences.afterPlayback) {
@@ -124,9 +128,8 @@ struct CaptionOverlay: View {
         if media.subtitleSelection == "external", let frame = model.currentSubtitleImage {
             GeometryReader { geometry in
                 let bounds = CGRect(origin: .zero, size: geometry.size)
-                let custom = display.frame(in: bounds)
                 let ratio = videoSize.width > 0 && videoSize.height > 0 ? videoSize.width / videoSize.height : frame.canvas.width / frame.canvas.height
-                let fitted = display.aspect == .original ? subtitleVideoRect(bounds, ratio: ratio, fill: display.fit == .fill) : custom
+                let fitted = subtitleVideoRect(bounds, ratio: ratio, fill: display.fit == .fill)
                 Canvas { context, _ in
                     for part in frame.parts {
                         let r = part.bounds

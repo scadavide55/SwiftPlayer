@@ -11,6 +11,30 @@ final class SubtitleEncodingTests: DebugMatrixTestCase {
         return url
     }
 
+    func testSettingsDefaultEncodingLoadsNewFilesAndExplicitChoiceOverridesIt() async throws {
+        let suite = "DefaultEncoding-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = PlayerPreferences(defaults: defaults)
+        XCTAssertEqual(preferences.defaultSubtitleEncoding, .automatic)
+        preferences.defaultSubtitleEncoding = .big5
+        XCTAssertEqual(PlayerPreferences(defaults: defaults).defaultSubtitleEncoding, .big5)
+        let model = PlayerModel(preferences: preferences)
+        defer { model.teardown() }
+        try await ready(model)
+        let url = try subtitle([0xa4, 0xa4, 0xa4, 0xe5])
+        model.loadSubtitles(url: url)
+        try await waitUntilCondition { !model.hasPendingSubtitleLoad }
+        XCTAssertEqual(model.subtitleCues.first?.text, "中文")
+        XCTAssertEqual(model.mediaControls.externalSubtitleEncoding, .big5)
+        let unicode = directory.appendingPathComponent("Generated-Unicode.srt")
+        try "1\n00:00:01,000 --> 00:00:05,000\nGenerated caption\n".write(to: unicode, atomically: true, encoding: .utf8)
+        model.loadSubtitles(url: unicode, encoding: .utf8)
+        try await waitUntilCondition { !model.hasPendingSubtitleLoad }
+        XCTAssertEqual(model.subtitleCues.first?.text, "Generated caption")
+        XCTAssertEqual(model.mediaControls.externalSubtitleEncoding, .utf8)
+    }
+
     func testKnownBig5GB18030AndShiftJISBytesDecodeCorrectly() throws {
         for (encoding, bytes, text) in [
             (SubtitleEncoding.big5, [UInt8(0xa4), 0xa4, 0xa4, 0xe5], "中文"),
@@ -57,7 +81,7 @@ final class SubtitleEncodingTests: DebugMatrixTestCase {
         try await waitUntilCondition { model.mediaControls.subtitleSelection == "external" }
         XCTAssertEqual(model.subtitleCues.first?.text, "中文")
         XCTAssertEqual(preferences.mediaMemory(for: audio[1])?.subtitleEncoding, .big5)
-        model.reloadSubtitles(encoding: .utf8)
+        model.loadSubtitles(url: url, encoding: .utf8, activate: false)
         try await waitUntilCondition { !model.hasPendingSubtitleLoad }
         XCTAssertEqual(model.subtitleCues.first?.text, "中文")
         XCTAssertEqual(model.mediaControls.externalSubtitleEncoding, .big5)
@@ -67,7 +91,7 @@ final class SubtitleEncodingTests: DebugMatrixTestCase {
         XCTAssertEqual(model.subtitleCues.first?.text, "中文")
         XCTAssertEqual(model.mediaControls.externalSubtitleEncoding, .big5)
         model.mediaControls.subtitleSelection = "off"
-        model.reloadSubtitles(encoding: .big5)
+        model.loadSubtitles(url: url, encoding: .big5, activate: false)
         try await waitUntilCondition { !model.hasPendingSubtitleLoad }
         XCTAssertEqual(model.mediaControls.subtitleSelection, "off")
         XCTAssertEqual(model.player.rate, 0)

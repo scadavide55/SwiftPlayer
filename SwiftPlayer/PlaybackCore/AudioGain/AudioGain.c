@@ -9,14 +9,12 @@ _Static_assert(__atomic_always_lock_free(sizeof(float), 0), "Audio gain must be 
 struct SPAudioGain {
     _Atomic(float) value;
     atomic_bool limiter;
-    atomic_bool normalize;
     atomic_uint owners;
 };
 typedef struct {
     SPAudioGain *gain;
     AudioStreamBasicDescription format;
     float previousGain;
-    float normalization;
     float limiting;
 } TapContext;
 
@@ -26,15 +24,13 @@ SPAudioGain *SPAudioGainCreate(float value) {
     atomic_init(&gain->value, value);
     atomic_init(&gain->owners, 1);
     atomic_init(&gain->limiter, true);
-    atomic_init(&gain->normalize, false);
     return gain;
 }
 void SPAudioGainRelease(SPAudioGain *gain) {
     if (atomic_fetch_sub_explicit(&gain->owners, 1, memory_order_acq_rel) == 1) free(gain);
 }
-void SPAudioGainSetProcessing(SPAudioGain *gain, bool limiter, bool normalize) {
+void SPAudioGainSetLimiter(SPAudioGain *gain, bool limiter) {
     atomic_store_explicit(&gain->limiter, limiter, memory_order_relaxed);
-    atomic_store_explicit(&gain->normalize, normalize, memory_order_relaxed);
 }
 void SPAudioGainSet(SPAudioGain *gain, float value) {
     if (isfinite(value)) atomic_store_explicit(&gain->value, fminf(fmaxf(value, 1), 4), memory_order_relaxed);
@@ -48,7 +44,6 @@ static void finalize(MTAudioProcessingTapRef tap) {
 static void prepare(MTAudioProcessingTapRef tap, CMItemCount frames, const AudioStreamBasicDescription *format) {
     TapContext *context = MTAudioProcessingTapGetStorage(tap);
     context->format = *format;
-    context->normalization = 1;
     context->limiting = 1;
     context->previousGain = atomic_load_explicit(&context->gain->value, memory_order_relaxed);
 }
@@ -69,15 +64,13 @@ static void process(MTAudioProcessingTapRef tap, CMItemCount frames, MTAudioProc
     float gain = atomic_load_explicit(&context->gain->value, memory_order_relaxed);
     float previous = context->previousGain;
     context->previousGain = gain;
-    bool normalize = atomic_load_explicit(&context->gain->normalize, memory_order_relaxed);
     bool limiter = atomic_load_explicit(&context->gain->limiter, memory_order_relaxed);
-    if (gain == 1 && previous == 1 && !normalize && context->normalization == 1 && context->limiting == 1) return;
+    if (gain == 1 && previous == 1 && !limiter && context->limiting == 1) return;
     AudioStreamBasicDescription format = context->format;
     // AVFoundation supplies native-endian PCM to the tap. Interleaved and
     // planar layouts both work: every buffer carries its own channel count.
     if (format.mFormatID != kAudioFormatLinearPCM || (format.mFormatFlags & kAudioFormatFlagIsBigEndian)) return;
-    double peak = 0, energy = 0;
-    size_t samplesCount = 0;
+    double peak = 0;
     UInt32 sampleBytes = format.mBitsPerChannel / 8;
     if (!sampleBytes || format.mSampleRate <= 0) return;
     // Measure all channels together so processing preserves stereo balance.
@@ -91,20 +84,10 @@ static void process(MTAudioProcessingTapRef tap, CMItemCount frames, MTAudioProc
             double sample = readSample(&buffer, i, format.mFormatFlags, sampleBytes);
             if (!isfinite(sample)) continue;
             peak = fmax(peak, fabs(sample));
-            energy += sample * sample;
-            samplesCount++;
         }
     }
     double seconds = *framesOut / format.mSampleRate;
-    double rms = samplesCount ? sqrt(energy / samplesCount) : 0;
-    // Optional level normalization targets -17 dBFS RMS. A -40 dBFS gate
-    // avoids amplifying silence/noise; gain recovers gradually rather than pumping.
-    float target = normalize && rms > 0.01 ? fmin(fmax(0.14 / rms, 0.1), 4) : 1;
-    float oldNormalization = context->normalization;
-    double recovery = target < oldNormalization ? 0.05 : 1.0;
-    context->normalization += (target - oldNormalization) * (1 - exp(-seconds / recovery));
-    if (fabsf(context->normalization - target) < 0.0001) context->normalization = target;
-    float maximumGain = fmaxf(gain, previous) * fmaxf(oldNormalization, context->normalization);
+    float maximumGain = fmaxf(gain, previous);
     float requiredLimit = limiter && peak * maximumGain > 0.98 ? 0.98 / (peak * maximumGain) : 1;
     // The already-available source block provides peak lookahead without adding
     // latency. Immediate attack and a 250 ms release protect boosts smoothly.
@@ -123,9 +106,7 @@ static void process(MTAudioProcessingTapRef tap, CMItemCount frames, MTAudioProc
         double rampFrames = fmax(1, format.mSampleRate * 0.005);
         for (size_t i = 0; i < count; i++) {
             float mix = fminf(1, (float)((i / buffer.mNumberChannels + 1) / rampFrames));
-            float frameProgress = fminf(1, (float)(i / buffer.mNumberChannels + 1) / fmaxf(1, (float)*framesOut));
-            float normalization = oldNormalization + (context->normalization - oldNormalization) * frameProgress;
-            float scale = (previous + (gain - previous) * mix) * normalization * context->limiting;
+            float scale = (previous + (gain - previous) * mix) * context->limiting;
             if ((format.mFormatFlags & kAudioFormatFlagIsFloat) && bytes == 4) {
                 float *samples = buffer.mData;
                 samples[i] = limited(samples[i] * scale);

@@ -17,13 +17,11 @@ struct SubtitlePanel: View {
     @ObservedObject var media: PlayerMediaControls
     @ObservedObject var preferences: PlayerPreferences
     let openFile: () -> Void
-    let appearance: () -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             SubtitleSelectionPicker(media: media)
             Button("Load Subtitle File…", action: openFile)
             LanguagePreferencePicker(title: "Preferred language", selection: $preferences.subtitleLanguage)
-            Button("Appearance and Fonts…", action: appearance)
             if media.subtitleSelection == "external" {
                 Divider()
                 Toggle("Show external subtitles", isOn: $model.subtitlesEnabled)

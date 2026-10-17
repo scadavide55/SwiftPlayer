@@ -23,6 +23,9 @@ struct SubtitleAppearance: Codable, Equatable {
 final class PlayerPreferences: ObservableObject {
     static let shared = PlayerPreferences(defaults: .standard)
     private let defaults: UserDefaults
+    @Published var defaultSubtitleEncoding: SubtitleEncoding {
+        didSet { defaults.set(defaultSubtitleEncoding.rawValue, forKey: "defaultSubtitleEncoding") }
+    }
     @Published var subtitleLanguage: String { didSet { defaults.set(subtitleLanguage, forKey: "subtitleLanguage") } }
     @Published var audioLanguage: String { didSet { defaults.set(audioLanguage, forKey: "audioLanguage") } }
     @Published var subtitlesByDefault: Bool { didSet { defaults.set(subtitlesByDefault, forKey: "subtitlesByDefault") } }
@@ -35,7 +38,6 @@ final class PlayerPreferences: ObservableObject {
         }
     }
     @Published var limitAudioPeaks: Bool { didSet { defaults.set(limitAudioPeaks, forKey: "limitAudioPeaks") } }
-    @Published var normalizeAudio: Bool { didSet { defaults.set(normalizeAudio, forKey: "normalizeAudio") } }
     @Published var keepDisplayAwake: Bool { didSet { defaults.set(keepDisplayAwake, forKey: "keepDisplayAwake") } }
     @Published var rememberVolume: Bool { didSet { defaults.set(rememberVolume, forKey: "rememberVolume") } }
     @Published var autoFindSubtitles: Bool { didSet { defaults.set(autoFindSubtitles, forKey: "autoFindSubtitles") } }
@@ -69,6 +71,7 @@ final class PlayerPreferences: ObservableObject {
 
     init(defaults: UserDefaults) {
         self.defaults = defaults
+        defaultSubtitleEncoding = SubtitleEncoding(rawValue: defaults.string(forKey: "defaultSubtitleEncoding") ?? "") ?? .automatic
         subtitleLanguage = defaults.string(forKey: "subtitleLanguage") ?? ""
         audioLanguage = defaults.string(forKey: "audioLanguage") ?? ""
         subtitlesByDefault = defaults.object(forKey: "subtitlesByDefault") as? Bool ?? true
@@ -76,7 +79,6 @@ final class PlayerPreferences: ObservableObject {
         let savedMaximum = defaults.object(forKey: "maximumVolume") as? Float ?? 2
         maximumVolume = savedMaximum.isFinite ? min(max(savedMaximum, 1), 4) : 2
         limitAudioPeaks = defaults.object(forKey: "limitAudioPeaks") as? Bool ?? true
-        normalizeAudio = defaults.object(forKey: "normalizeAudio") as? Bool ?? false
         keepDisplayAwake = defaults.object(forKey: "keepDisplayAwake") as? Bool ?? true
         rememberVolume = defaults.object(forKey: "rememberVolume") as? Bool ?? true
         autoFindSubtitles = defaults.object(forKey: "autoFindSubtitles") as? Bool ?? true
