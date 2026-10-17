@@ -20,12 +20,12 @@ A minimal, fully native video and audio player for macOS built with SwiftUI and 
 - **ASS/SSA file styling** – Honor declared fonts, inline bold/italic/underline and colors, outlines, shadows, alignment, margins, positions, layers, movement and simple fades. Disable file styling in Appearance to use your own font and appearance instead.
 - **Audio languages** – Select an audio track or use a preferred language automatically.
 - **System volume** – The volume slider, mute button, and Up/Down keys control the Mac's system output for all apps, with a fixed 0–100% range.
-- **Audio processing** – Optionally normalize quiet and loud passages with linked peak protection. Peak protection is on by default; normalization is off.
-- **After playback** – Stay at the end, rewind and pause, repeat the file, or close it, without a modal prompt.
+- **Audio processing** – Linked peak protection reduces digital peaks and clipping and is on by default.
+- **After playback** – Stop at End releases the decoder and subtitle buffers; Replay reloads the file. Repeat File plays continuously without unloading.
 - **Subtitle workflow** – Find matching files in folders you authorize, prefer your subtitle language, and adjust embedded or external subtitle timing.
 - **Per-file choices** – Optionally remember audio/subtitle tracks, external subtitle references, and subtitle delay when reopening a file.
 - **Seek previews** – Hover or drag over the timeline for a small thumbnail without seeking the playing video until you release the scrubber.
-- **Native viewing controls** – Always on Top, Fit/Fill, aspect-ratio choices, Retina-aware window-size presets, and double-click fullscreen.
+- **Native viewing controls** – Always on Top, Fit/Fill with native proportions, ordinary window resizing, and double-click fullscreen.
 - **Frame capture** – Save or copy a PNG of the current video frame, optionally including styled text subtitles.
 - **Legacy subtitle encodings** – Preview Big5, GB18030, or Shift-JIS subtitles before loading, and remember the successful encoding per media file.
 - **Display sleep prevention** – Optionally keep the display awake only while video plays. Pausing, closing, or replacing it with audio-only playback releases the request.
@@ -37,7 +37,7 @@ A minimal, fully native video and audio player for macOS built with SwiftUI and 
 - **Drag & drop** – Load media by dragging files directly onto the window
 - **Keyboard navigation** – Left/Right make 5-second jumps while playing or paused; rapid taps accumulate. Holds accelerate forward playback or step the paused/reverse timeline. Up/Down adjust Mac system volume by 5 percentage points, up to 100%, and Space plays/pauses. Shortcuts continue working after a player control takes focus and leave editable text fields alone.
 - **Playback feedback** – Jumps show time with milliseconds and an estimated, one-based frame number at the upper left. Volume adjustments show Mac system volume at the upper right. Each display fades after three seconds; repeat input restarts its timer, and held navigation stays visible until release. Frame estimates use nominal FPS and may differ from actual sample numbers in variable-rate video.
-- **Frame stepping** – Control–Left/Right pauses and steps the video backward/forward by one native frame. Playback → Previous Frame/Next Frame provides the same controls where supported.
+- **Frame stepping** – Control–Left/Right pauses and steps the video backward/forward by one native frame. Play → Previous Frame/Next Frame provides the same controls where supported.
 
 ## Supported Formats
 
@@ -131,8 +131,8 @@ Retagging is a compatibility workaround, not a general HEVC conversion: streams
 that depend on new parameter sets carried inside later frames may still fail.
 
 Subtitle files load in the background, with a 16 MiB input limit. UTF-8 and
-BOM-marked UTF-16 files are read automatically. The import preview and External
-Text Encoding menu also support Big5, GB18030, and Shift-JIS without guessing
+BOM-marked UTF-16 files are read automatically. Settings → Subtitle Appearance
+sets the default text encoding; the import preview also supports Big5, GB18030, and Shift-JIS without guessing
 between ambiguous encodings. Replacing or closing playback cancels
 pending preparation, seeks, subtitle loading, and held-key seeking, and releases
 the previous media's subtitle and Picture in Picture resources.
@@ -183,21 +183,30 @@ The additional core matrix runs 100 scenario/input combinations. Its complete
 run requires both local media environment variables described above. See
 [the core review](CORE_REVIEW_100.md) for the verified fixes and coverage limits.
 
+See [the viewer controls review](VIEWER_CONTROLS_REVIEW.md) for the simplification,
+confirmed peak-protection fix, and completed regression checks.
+
 ## Playback menus and settings
 
-- **File → Open File…** (`⌘O`) or **Open Recent** opens one file. Recent files use read-only security-scoped bookmarks, with up to ten entries. A multiple-file queue is deferred.
+The viewer menus are **Play → Video → Audio → Subtitles**. Full Screen is in
+Video; there is no separate View menu. **Play → Play / Pause** uses Space.
+**Control–Up/Down** changes speed by 0.05× (1× → 1.05× → 1.10× → 1.15×),
+bounded at 0.05× and 4×, independently of the preset Speed choices.
+Preferred Language is the first item in both Audio and Subtitles.
+
+- **File → Open File…** (`⌘O`) reuses an empty player; when it already has a file, another window opens. Selecting multiple files opens independent windows. **Open Recent**, history, and dropping another file also open another window while the current one continues. The same video can play in several windows; the last window closed determines its saved playback position. Recent files use read-only security-scoped bookmarks, with up to ten entries.
 - **File → Playback History…** (`⇧⌘H`) searches up to 200 files, with All/Unfinished/Finished filters and per-file progress. Continue explicitly restores progress independently of automatic resume; finished files open from the beginning. Missing files remain listed until removed or expired. History is recorded by default, with 90-day retention; General settings offers 30/90/365 days, disable, and Clear History. Turning history off clears its list and progress. Clear/remove also invalidates existing playback sessions so they cannot silently recreate removed entries.
-- **Playback → Jump to Time…** (`⌘J`) accepts seconds, minutes:seconds, or hours:minutes:seconds. Chapter navigation appears when the file supplies chapter titles. Changing position preserves pause.
-- **Playback → Previous Frame / Next Frame** (`⌃←` / `⌃→`) pauses video and steps through its native timeline, including variable frame intervals. It cancels held-key seeking and pending ordinary seeks. Audio-only files and unsupported directions are disabled. Ordinary seeking retains the default AVFoundation tolerance. macOS may reserve these shortcuts for switching Spaces; if so, use the menu commands or change those assignments in System Settings → Keyboard → Keyboard Shortcuts → Mission Control.
+- **Play → Jump to Time…** (`⌘J`) accepts seconds, minutes:seconds, or hours:minutes:seconds. Chapter navigation appears when the file supplies chapter titles. Changing position preserves pause.
+- **Play → Previous Frame / Next Frame** (`⌃←` / `⌃→`) pauses video and steps through its native timeline, including variable frame intervals. It cancels held-key seeking and pending ordinary seeks. Audio-only files and unsupported directions are disabled. Ordinary seeking retains the default AVFoundation tolerance. macOS may reserve these shortcuts for switching Spaces; if so, use the menu commands or change those assignments in System Settings → Keyboard → Keyboard Shortcuts → Mission Control.
 - **Audio → Audio track** selects an embedded audio track. The preferred language applies while the selector is Automatic.
 - **Subtitles → Subtitle track** offers Off, Automatic, embedded choices, and a loaded external file. Automatic prefers a full subtitle option in the preferred language, falling back to the first full option before forced-only captions. Explicit track choices take precedence over language preferences.
-- **Subtitles → Appearance and Fonts…** styles decoded text captions in the main window. The caption popover also offers external-file loading and timing for embedded or external text. Positive delay displays captions later; negative delay displays them earlier, within a ±30-second range.
+- **Settings → Subtitle Appearance** controls fonts, styling, and the default encoding for newly opened subtitle files. The import preview can override encoding, and remembered per-file choices take priority. The caption popover also offers external-file loading and timing for embedded or external text. Positive delay displays captions later; negative delay displays them earlier, within a ±30-second range.
 - **Subtitles → Find Matching Subtitles…** searches only folders added under Settings → Subtitle Files. Matching uses the media basename and optional language/forced-caption tags, without scanning subfolders. Automatic finding respects Off and explicit track choices. Option–Left/Right adjusts subtitle timing by 0.1 seconds.
-- **Playback → After Playback** selects Stay at End, Rewind and Pause, Repeat File, or Close File. The same preference is available in General settings.
-- **Video** offers Always on Top, Fit/Fill, Original/16:9/4:3/21:9/1:1 aspect ratios, and window-size presets. The 50%/100%/200% presets account for Retina scaling and fit within the screen's visible area. These presentation choices apply to the main window; PiP retains native video presentation. Always on Top is suspended in fullscreen and restored on exit.
-- **Video → Capture Frame** saves a PNG through the system save dialog or copies it to the clipboard. Include Subtitles is off by default. Exports use the original video frame with its preferred orientation, independent of window scaling, at full resolution up to 8192 pixels per side; larger frames are downscaled. PNG output uses sRGB SDR color. Text captions use the current font, color, outline, background, and position, with size scaled for the exported image. No controls or window decorations are included.
+- **Play → After Playback** selects Stop at End or Repeat File. Stop releases the player item, decoder resources, subtitle buffers, and temporary preparation files while keeping lightweight file information. **Replay** (or Space) reloads from the beginning. Seeking backward reloads paused at the requested position. Repeat keeps the decoder loaded and starts again. The same preference is available in General settings.
+- **Video** offers Full Screen, Always on Top, and Fit/Fill using the video’s native proportions. Resize the ordinary window by dragging its edges. These presentation choices apply to the main window; PiP retains native video presentation. Always on Top is suspended in fullscreen and restored on exit.
+- **Video → Capture Frame → Save Frame…** (**F5**, or Fn–F5 when macOS uses the key for a system function) saves a PNG through the system save dialog. To save **with subtitles**, enable **Include Subtitles** before pressing F5; to save **without subtitles**, turn it off. The toggle is off by default. Copy Frame uses the same choice. Exports use the original video frame with its preferred orientation, independent of window scaling, at full resolution up to 8192 pixels per side; larger frames are downscaled. PNG output uses sRGB SDR color. Text captions use the current font, color, outline, background, and position, with size scaled for the exported image. No controls or window decorations are included.
 - **Window → Media Information…** (`⌘I`) shows the current file's streams and duration. Select Playback for live state, waiting reason, selected/player/effective clock rates, native buffer flags, reported loaded ranges/time ahead, presentation size, and app memory across all windows. Player Rate is the native requested rate; Effective Clock Speed reads the media timebase and can be zero while waiting. Sampling runs once per second only while that tab is visible. Local files may not report loaded ranges; unavailable values are labeled accordingly. Stream frame rates are nominal media metadata; live renderer and dropped-frame counters are not collected.
-- **SwiftPlayer → Settings…** (`⌘,`) saves language and appearance preferences, controls optional audio processing, and enables optional automatic resume. Volume uses the Mac's fixed 0–100% system range. Turning automatic resume off clears its separate saved positions. History progress is controlled separately. Automatic resume excludes positions near the start or end.
+- **SwiftPlayer → Settings…** (`⌘,`) saves language and appearance preferences, controls peak protection, and enables optional automatic resume. Volume uses the Mac's fixed 0–100% system range. Turning automatic resume off clears its separate saved positions. History progress is controlled separately. Automatic resume excludes positions near the start or end.
 
 The Mac volume controls affect every app using the current default output.
 Their maximum is always 100%; the configurable application boost ceiling is
@@ -207,10 +216,9 @@ boost, or mute setting. Native output-device changes update all player windows.
 Outputs without software volume controls show volume as unavailable; use their
 hardware controls instead. Increasing a supported output's level also unmutes it.
 
-Optional normalization and peak protection process only SwiftPlayer's audio.
-Normalization adjusts level gradually within a bounded range, with a quiet-input
-gate that avoids amplifying silence. Processing preserves channel balance,
-pitch, and the native playback clock.
+Peak protection processes only SwiftPlayer’s audio and preserves channel balance,
+pitch, and the native playback clock. It limits digital peaks; physical output
+loudness still depends on system volume and the connected speakers or headphones.
 
 Preferences, recent-file references, resume positions, and per-file track/timing
 choices stay in local app storage. Turning off Remember tracks and subtitle
@@ -275,14 +283,15 @@ Tested on: MacBook Air 2020 (Intel Core i3, dual-core) and MacBook Air M5 (2026)
 
 ## Keyboard Shortcuts
 
-- **Space** – Play/pause
+- **Space** – Play / Pause; Replay after Stop at End
+- **Control–Up/Down Arrow** – Increase/decrease speed by exactly 0.05×, from 0.05× to 4×
+- **F5** – Save the current frame, with or without subtitles according to Include Subtitles
 - **Left/Right Arrow** – Jump back/forward 5 seconds immediately; holding waits 0.5 seconds, then repeats the jump every 0.1 seconds. Release preserves the playing/paused state and selected playback speed.
 - **Shift–Left/Right Arrow** – Hold for native 4× reverse/forward playback after the 0.5-second delay. The initial press makes the normal 5-second jump. Release restores the previous playing/paused state and selected speed. Formats without native fast playback support use repeated 5-second jumps instead.
 - **Control–Left/Right Arrow** – Pause and step backward/forward one video frame
 - **Up/Down Arrow** – Adjust Mac system volume by 5 percentage points (0–100%)
 - **Option–Left/Right Arrow** – Display subtitles 0.1 seconds earlier/later
 - **Control–Command–F** or **double-click the video** – Toggle fullscreen for that player window
-- **Home button** – Return to file selection screen
 
 ## License
 
