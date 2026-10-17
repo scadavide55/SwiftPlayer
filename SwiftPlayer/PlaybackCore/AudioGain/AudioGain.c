@@ -71,7 +71,7 @@ static void process(MTAudioProcessingTapRef tap, CMItemCount frames, MTAudioProc
     context->previousGain = gain;
     bool normalize = atomic_load_explicit(&context->gain->normalize, memory_order_relaxed);
     bool limiter = atomic_load_explicit(&context->gain->limiter, memory_order_relaxed);
-    if (gain == 1 && previous == 1 && !normalize && context->normalization == 1 && context->limiting == 1) return;
+    if (gain == 1 && previous == 1 && !limiter && !normalize && context->normalization == 1 && context->limiting == 1) return;
     AudioStreamBasicDescription format = context->format;
     // AVFoundation supplies native-endian PCM to the tap. Interleaved and
     // planar layouts both work: every buffer carries its own channel count.

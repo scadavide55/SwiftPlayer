@@ -153,6 +153,13 @@ final class VolumeBoostTests: DebugMatrixTestCase {
         for frame in 0..<(protected.count / 2) { XCTAssertEqual(protected[frame * 2], protected[frame * 2 + 1]) }
     }
 
+    func testPeakProtectionAlsoLimitsUnboostedAudio() async throws {
+        let protected = try await renderedSamples(gain: 1, amplitude: 0.995, channels: 2)
+        let unprotected = try await renderedSamples(gain: 1, amplitude: 0.995, channels: 2, limiter: false)
+        XCTAssertLessThanOrEqual(protected.map(abs).max() ?? 0, 0.981)
+        XCTAssertGreaterThan(unprotected.map(abs).max() ?? 0, 0.99)
+    }
+
     func testNormalizationBalancesLevelsAndDoesNotBoostNoiseOrSilence() async throws {
         func rms(_ samples: [Float]) -> Double {
             let tail = samples.suffix(48000)
