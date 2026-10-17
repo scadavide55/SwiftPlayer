@@ -1,4 +1,5 @@
 import XCTest
+import AppKit
 @testable import SwiftPlayer
 
 @MainActor
@@ -41,6 +42,34 @@ final class SystemVolumeTests: XCTestCase {
         let count = backend.writes.count
         control.setVolume(.nan); control.setVolume(.infinity)
         XCTAssertEqual(backend.writes.count, count)
+    }
+
+    func testVolumeKeysUseSystemOutputAndRemainWithinZeroToOneHundredPercent() throws {
+        let backend = Backend()
+        backend.state.volume = 0
+        let control = SystemVolumeController(backend: backend)
+        let view = KeyEventHandlingView.KeyCatcherView()
+        view.onVolumeUp = { control.increase() }
+        view.onVolumeDown = { control.decrease() }
+        defer { KeyEventHandlingView.dismantleNSView(view, coordinator: ()) }
+        func key(_ code: UInt16, repeatKey: Bool = false) throws {
+            view.keyDown(with: try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero,
+                modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+                characters: "", charactersIgnoringModifiers: "", isARepeat: repeatKey, keyCode: code)))
+        }
+        for step in 1...80 {
+            try key(126, repeatKey: step > 1)
+            XCTAssertEqual(control.volume, min(Float(step) * 0.05, 1), accuracy: 0.00001)
+            XCTAssertFalse(control.isMuted)
+        }
+        for step in stride(from: 19, through: 0, by: -1) {
+            try key(125)
+            XCTAssertEqual(control.volume, Float(step) * 0.05, accuracy: 0.00001)
+        }
+        try key(125)
+        XCTAssertEqual(control.volume, 0)
+        XCTAssertTrue(control.isMuted)
+        XCTAssertTrue(backend.writes.allSatisfy { (0...1).contains($0) })
     }
 
     func testVolumeFeedbackIncludesRepeatedAdjustmentsAtTheLimitButNotFailures() {

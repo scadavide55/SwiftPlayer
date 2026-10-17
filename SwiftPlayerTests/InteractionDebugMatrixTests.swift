@@ -43,14 +43,13 @@ final class InteractionDebugMatrixTests: DebugMatrixTestCase {
                         view.keyUp(with: try key(variant % 2 == 0 ? 123 : 124, flags: flags[variant], up: true))
                         XCTAssertEqual(releases, 1)
                     case 3:
-                        let model = PlayerModel()
-                        model.volume = Float(variant) / 10
-                        view.onVolumeUp = { model.volumeUp() }
-                        view.onVolumeDown = { model.volumeDown() }
-                        view.keyDown(with: try key(126))
-                        XCTAssertEqual(model.volume, min(Float(variant) / 10 + 0.05, 1), accuracy: 0.001)
-                        view.keyDown(with: try key(125))
-                        XCTAssertEqual(model.volume, Float(variant) / 10, accuracy: 0.001)
+                        var steps = 0
+                        view.onVolumeUp = { steps += 1 }
+                        view.onVolumeDown = { steps -= 1 }
+                        for index in 0...variant { view.keyDown(with: try key(126, repeatKey: index > 0)) }
+                        XCTAssertEqual(steps, variant + 1)
+                        for index in 0...variant { view.keyDown(with: try key(125, repeatKey: index > 0)) }
+                        XCTAssertEqual(steps, 0)
                     case 4:
                         let flags: [NSEvent.ModifierFlags] = [.command, .control, .option, [.command, .shift], [.control, .shift],
                             [.option, .shift], [.command, .control], [.command, .option], [.control, .option], [.command, .control, .option]]

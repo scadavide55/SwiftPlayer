@@ -127,7 +127,7 @@ final class PlayerLifecycleTests: XCTestCase {
         XCTAssertTrue(model.playbackRequested)
     }
 
-    func testVolumeClampsInvalidValuesAndUnmutesOnIncrease() {
+    func testVolumeClampsInvalidValuesAndUnmutesOnAdjustment() {
         let model = PlayerModel()
         model.volume = -1
         XCTAssertEqual(model.volume, 0)
@@ -139,7 +139,7 @@ final class PlayerLifecycleTests: XCTestCase {
         model.volume = .infinity
         XCTAssertEqual(model.volume, 2)
         model.isMuted = true
-        model.volumeDown()
+        model.volume -= 0.05
         XCTAssertEqual(model.volume, 1.95, accuracy: 0.001)
         XCTAssertFalse(model.isMuted)
         XCTAssertFalse(model.player.isMuted)
@@ -173,7 +173,7 @@ final class PlayerLifecycleTests: XCTestCase {
         model.player.isMuted = false
         try await Task.sleep(for: .milliseconds(100))
         XCTAssertFalse(model.isMuted)
-        model.volumeUp()
+        model.volume += 0.05
         XCTAssertEqual(model.player.volume, 0.3, accuracy: 0.001)
     }
 

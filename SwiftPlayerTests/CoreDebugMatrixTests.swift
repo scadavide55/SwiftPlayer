@@ -93,7 +93,7 @@ final class CoreDebugMatrixTests: DebugMatrixTestCase {
                         XCTAssertEqual(model.player.volume, volume)
                         XCTAssertTrue(model.isMuted)
                         XCTAssertTrue(model.player.isMuted)
-                        model.volumeDown()
+                        model.volume -= 0.05
                         if model.volume > 0 { XCTAssertFalse(model.isMuted) }
                         model.player.volume = volume / 2
                         model.player.isMuted = true

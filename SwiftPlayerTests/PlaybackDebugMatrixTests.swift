@@ -39,7 +39,7 @@ final class PlaybackDebugMatrixTests: DebugMatrixTestCase {
                         model.volume = Float(variant) / 10
                         model.isMuted = true
                         XCTAssertTrue(model.player.isMuted)
-                        model.volumeUp()
+                        model.volume += 0.05
                         XCTAssertFalse(model.player.isMuted)
                         XCTAssertEqual(model.player.volume, min(Float(variant) / 10 + 0.05, 1), accuracy: 0.001)
                     case 5:
