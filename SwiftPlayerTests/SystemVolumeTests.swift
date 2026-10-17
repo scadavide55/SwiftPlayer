@@ -43,6 +43,23 @@ final class SystemVolumeTests: XCTestCase {
         XCTAssertEqual(backend.writes.count, count)
     }
 
+    func testVolumeFeedbackIncludesRepeatedAdjustmentsAtTheLimitButNotFailures() {
+        let backend = Backend()
+        backend.state.volume = 1
+        let control = SystemVolumeController(backend: backend)
+        XCTAssertNil(control.adjustmentIdentifier)
+        control.increase()
+        let first = control.adjustmentIdentifier
+        XCTAssertNotNil(first)
+        XCTAssertEqual(control.volume, 1)
+        control.increase()
+        XCTAssertNotEqual(control.adjustmentIdentifier, first)
+        let latest = control.adjustmentIdentifier
+        backend.fails = true
+        control.decrease()
+        XCTAssertEqual(control.adjustmentIdentifier, latest)
+    }
+
     func testNativeChangesOutputReplacementAndFailuresAreReflected() {
         let backend = Backend()
         let control = SystemVolumeController(backend: backend)

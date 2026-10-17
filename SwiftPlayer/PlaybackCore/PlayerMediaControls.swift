@@ -27,6 +27,7 @@ struct MediaStreamInfo: Identifiable {
 final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegibleOutputPushDelegate {
     @Published private(set) var subtitleTracks: [MediaTrackChoice] = []
     @Published private(set) var audioTracks: [MediaTrackChoice] = []
+    @Published private(set) var videoFrameRate: Double?
     @Published private(set) var chapters: [PlaybackChapter] = []
     @Published private(set) var streams: [MediaStreamInfo] = []
     @Published private(set) var embeddedText = ""
@@ -154,12 +155,16 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
                     if start.isFinite { chapters.append(PlaybackChapter(id: index, title: title ?? "Chapter \(index + 1)", start: start)) }
                 }
                 var streams: [MediaStreamInfo] = []
+                var videoFrameRate: Double?
                 for track in try await asset.load(.tracks) {
                     try Task.checkCancellation()
                     let formats = try await track.load(.formatDescriptions)
                     let codecs = formats.map { Self.fourCC(CMFormatDescriptionGetMediaSubType($0)) }.joined(separator: ", ")
                     let size = try await track.load(.naturalSize)
                     let rate = try await track.load(.nominalFrameRate)
+                    if track.mediaType == .video, videoFrameRate == nil, rate.isFinite, rate > 0 {
+                        videoFrameRate = Double(rate)
+                    }
                     let extendedLanguage = try await track.load(.extendedLanguageTag)
                     let legacyLanguage = try await track.load(.languageCode)
                     let language = extendedLanguage ?? legacyLanguage
@@ -178,6 +183,7 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
                 self.audioTracks = Self.choices(audio, prefix: "audio")
                 self.chapters = chapters
                 self.streams = streams
+                self.videoFrameRate = videoFrameRate
                 self.restoreMemory(subtitlesUnchanged: self.subtitleSelectionRevision == initialSubtitleRevision,
                                    audioUnchanged: self.audioSelectionRevision == initialAudioRevision)
                 self.didDiscoverTracks = true
@@ -363,6 +369,7 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
         audioTracks = []
         chapters = []
         streams = []
+        videoFrameRate = nil
         captionTimeline.reset()
         embeddedText = ""
         externalSubtitleName = ""

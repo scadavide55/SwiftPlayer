@@ -28,6 +28,7 @@ final class SystemVolumeController: ObservableObject {
     @Published private(set) var canSetVolume = false
     @Published private(set) var canSetMute = false
     @Published private(set) var statusMessage = ""
+    @Published private(set) var adjustmentIdentifier: UUID?
     private let backend: SystemVolumeBackend
     private var nativeMute = false
     private var nativeCanMute = false
@@ -66,6 +67,7 @@ final class SystemVolumeController: ObservableObject {
         let unmuted = target <= 0 || !nativeMute || !nativeCanMute || backend.setMuted(false)
         refresh()
         if !unmuted { statusMessage = "The system mute state could not be changed." }
+        adjustmentIdentifier = UUID()
     }
 
     func increase() { adjust(by: 0.05) }
@@ -88,6 +90,7 @@ final class SystemVolumeController: ObservableObject {
             : muted ? backend.setVolume(0) : true
         refresh()
         if !succeeded { statusMessage = "The system mute state could not be changed." }
+        else { adjustmentIdentifier = UUID() }
     }
 
     func toggleMute() { refresh(); setMuted(!isMuted) }
