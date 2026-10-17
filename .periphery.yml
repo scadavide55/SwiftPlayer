@@ -1,0 +1,6 @@
+project: SwiftPlayer.xcodeproj
+schemes:
+- SwiftPlayer
+
+# Synthesized equality reads fields used by SwiftUI task identities.
+retain_equatable_properties: true
