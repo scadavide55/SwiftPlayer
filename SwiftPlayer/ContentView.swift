@@ -279,23 +279,21 @@ private struct PlayerContentView: View {
                                             .frame(width: 32, height: 32)
                                             .background(Circle().fill(Color.black.opacity(0.4)))
                                     }
-                                    HStack(spacing: 8) {
-                                        Button {
-                                            pipController.toggle()
-                                        } label: {
-                                            Image(systemName: pipController.isActive ? "pip.exit" : "pip.enter")
-                                                .font(.system(size: 14, weight: .semibold))
-                                                .foregroundStyle(pipController.isPossible ? .white : .white.opacity(0.35))
-                                                .frame(width: 32, height: 32)
-                                                .background(Circle().fill(Color.black.opacity(0.4)))
-                                        }
-                                        .buttonStyle(.plain)
-                                        .disabled(!pipController.isPossible)
-                                        .help(pipController.isActive ? "Exit Picture in Picture" : "Enter Picture in Picture")
-
-                                    }
                                     .buttonStyle(.plain)
                                     .help(windowControls.isFullScreen ? "Exit Full Screen" : "Enter Full Screen")
+
+                                    Button {
+                                        pipController.toggle()
+                                    } label: {
+                                        Image(systemName: pipController.isActive ? "pip.exit" : "pip.enter")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundStyle(pipController.isPossible ? .white : .white.opacity(0.35))
+                                            .frame(width: 32, height: 32)
+                                            .background(Circle().fill(Color.black.opacity(0.4)))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(!pipController.isPossible)
+                                    .help(pipController.isActive ? "Exit Picture in Picture" : "Enter Picture in Picture")
 
                                     Button {
                                         showSubtitlePanel = true
@@ -306,7 +304,6 @@ private struct PlayerContentView: View {
                                             .frame(width: 32, height: 32)
                                             .background(Circle().fill(Color.black.opacity(0.4)))
                                     }
-                                    .buttonStyle(.plain)
                                     .buttonStyle(.plain)
                                     .popover(isPresented: $showSubtitlePanel, arrowEdge: .bottom) {
                                         SubtitlePanel(model: model, media: model.mediaControls, preferences: preferences,
