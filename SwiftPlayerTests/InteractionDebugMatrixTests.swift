@@ -101,22 +101,23 @@ final class InteractionDebugMatrixTests: DebugMatrixTestCase {
                         second.sendEvent(try key(49))
                         XCTAssertEqual(otherPlays, 1)
                         let observer = PlayerWindowObserver.ObservingView()
-                        var fullscreen: [Bool] = []
+                        let controls = PlayerWindowControls()
+                        controls.attach(first)
+                        defer { controls.detach() }
                         var resigns = 0
-                        observer.onFullScreenChanged = { fullscreen.append($0) }
                         observer.onResignKey = { resigns += 1 }
                         view.addSubview(observer)
-                        fullscreen.removeAll()
                         for _ in 0...variant {
                             NotificationCenter.default.post(name: NSWindow.didEnterFullScreenNotification, object: second)
                             NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: second)
                         }
-                        XCTAssertTrue(fullscreen.isEmpty)
+                        XCTAssertFalse(controls.isFullScreen)
                         XCTAssertEqual(resigns, 0)
                         NotificationCenter.default.post(name: NSWindow.didEnterFullScreenNotification, object: first)
+                        XCTAssertTrue(controls.isFullScreen)
                         NotificationCenter.default.post(name: NSWindow.didExitFullScreenNotification, object: first)
+                        XCTAssertFalse(controls.isFullScreen)
                         NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: first)
-                        XCTAssertEqual(fullscreen, [true, false])
                         XCTAssertEqual(resigns, 1)
                         PlayerWindowObserver.dismantleNSView(observer, coordinator: ())
                         KeyEventHandlingView.dismantleNSView(other, coordinator: ())

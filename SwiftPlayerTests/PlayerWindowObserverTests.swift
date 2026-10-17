@@ -17,31 +17,26 @@ final class PlayerWindowObserverTests: XCTestCase {
         let other = window()
         defer { first.close(); other.close() }
         let view = PlayerWindowObserver.ObservingView()
-        var fullscreen: [Bool] = []
         var resigns = 0
-        view.onFullScreenChanged = { fullscreen.append($0) }
         view.onResignKey = { resigns += 1 }
         first.contentView = view
-        fullscreen.removeAll()
         for name in [NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification, NSWindow.didResignKeyNotification] {
             NotificationCenter.default.post(name: name, object: other)
         }
-        XCTAssertTrue(fullscreen.isEmpty)
         XCTAssertEqual(resigns, 0)
         NotificationCenter.default.post(name: NSWindow.didEnterFullScreenNotification, object: first)
         NotificationCenter.default.post(name: NSWindow.didExitFullScreenNotification, object: first)
         NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: first)
-        XCTAssertEqual(fullscreen, [true, false])
         XCTAssertEqual(resigns, 1)
         first.contentView = nil
         other.contentView = view
-        fullscreen.removeAll()
-        NotificationCenter.default.post(name: NSWindow.didEnterFullScreenNotification, object: first)
-        XCTAssertTrue(fullscreen.isEmpty)
+        NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: first)
+        XCTAssertEqual(resigns, 1)
+        NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: other)
+        XCTAssertEqual(resigns, 2)
         PlayerWindowObserver.dismantleNSView(view, coordinator: ())
-        NotificationCenter.default.post(name: NSWindow.didEnterFullScreenNotification, object: other)
-        XCTAssertTrue(fullscreen.isEmpty)
-        XCTAssertNil(view.onFullScreenChanged)
+        NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: other)
+        XCTAssertEqual(resigns, 2)
         XCTAssertNil(view.onResignKey)
     }
 
