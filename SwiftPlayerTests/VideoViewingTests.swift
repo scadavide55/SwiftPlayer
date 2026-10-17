@@ -17,27 +17,6 @@ final class VideoViewingTests: DebugMatrixTestCase {
         return window
     }
 
-    func testAspectFitAndFillAreCenteredAndRespectTheirBounds() {
-        let bounds = CGRect(x: 10, y: 20, width: 800, height: 600)
-        for aspect in VideoAspect.allCases where aspect != .original {
-            for fit in VideoFit.allCases {
-                let frame = VideoDisplayOptions(fit: fit, aspect: aspect).frame(in: bounds)
-                XCTAssertEqual(frame.midX, bounds.midX, accuracy: 0.001)
-                XCTAssertEqual(frame.midY, bounds.midY, accuracy: 0.001)
-                XCTAssertEqual(frame.width / frame.height, aspect.ratio!, accuracy: 0.001)
-                if fit == .fit {
-                    XCTAssertLessThanOrEqual(frame.width, bounds.width + 0.001)
-                    XCTAssertLessThanOrEqual(frame.height, bounds.height + 0.001)
-                } else {
-                    XCTAssertGreaterThanOrEqual(frame.width, bounds.width - 0.001)
-                    XCTAssertGreaterThanOrEqual(frame.height, bounds.height - 0.001)
-                }
-            }
-        }
-        XCTAssertEqual(VideoDisplayOptions().frame(in: bounds), bounds)
-        XCTAssertEqual(VideoDisplayOptions(aspect: .square).frame(in: .zero), .zero)
-    }
-
     func testNativeVideoLayerUsesGravityWithoutAddingCompositionOrOutputs() {
         let player = AVPlayer()
         let item = AVPlayerItem(asset: AVMutableComposition())
@@ -48,35 +27,14 @@ final class VideoViewingTests: DebugMatrixTestCase {
         view.display.fit = .fill
         view.layout()
         XCTAssertEqual(view.playerLayer.videoGravity, .resizeAspectFill)
-        view.display.aspect = .widescreen
+        view.display.fit = .fit
         view.layout()
-        XCTAssertEqual(view.playerLayer.videoGravity, .resize)
-        XCTAssertEqual(view.playerLayer.frame.width / view.playerLayer.frame.height, 16 / 9, accuracy: 0.001)
+        XCTAssertEqual(view.playerLayer.videoGravity, .resizeAspect)
+        XCTAssertEqual(view.playerLayer.frame, view.bounds)
         XCTAssertEqual(view.layer?.masksToBounds, true)
         XCTAssertNil(item.videoComposition)
         XCTAssertTrue(item.outputs.isEmpty)
         PlayerLayerView.dismantleNSView(view, coordinator: ())
-    }
-
-    func testRetinaSizingScreenClampingAndInvalidDimensions() throws {
-        let available = CGSize(width: 1400, height: 900)
-        let hd = CGSize(width: 1920, height: 1080)
-        let original = try XCTUnwrap(PlayerWindowControls.contentSize(video: hd, scale: 1,
-            backingScale: 2, available: available, minimum: .zero))
-        XCTAssertEqual(original, CGSize(width: 960, height: 540))
-        let half = try XCTUnwrap(PlayerWindowControls.contentSize(video: hd, scale: 0.5,
-            backingScale: 2, available: available, minimum: .zero))
-        XCTAssertEqual(half, CGSize(width: 480, height: 270))
-        for scale: CGFloat? in [nil, 1, 2] {
-            let huge = try XCTUnwrap(PlayerWindowControls.contentSize(video: CGSize(width: 8192, height: 4320),
-                scale: scale, backingScale: 2, available: available, minimum: CGSize(width: 480, height: 320)))
-            XCTAssertLessThanOrEqual(huge.width, available.width)
-            XCTAssertLessThanOrEqual(huge.height, available.height)
-            XCTAssertGreaterThanOrEqual(huge.width, 480)
-            XCTAssertGreaterThanOrEqual(huge.height, 320)
-        }
-        XCTAssertNil(PlayerWindowControls.contentSize(video: .zero, scale: 1, backingScale: 2, available: available, minimum: .zero))
-        XCTAssertNil(PlayerWindowControls.contentSize(video: hd, scale: .nan, backingScale: 2, available: available, minimum: .zero))
     }
 
     func testAlwaysOnTopIsPerWindowAndRestoresTheOriginalLevel() {
@@ -133,9 +91,8 @@ final class VideoViewingTests: DebugMatrixTestCase {
         XCTAssertEqual(controls.videoSize.width, 1920)
         let item = model.player.currentItem
         let time = model.player.currentTime().seconds
-        controls.resize(scale: 1)
-        controls.display = VideoDisplayOptions(fit: .fill, aspect: .classic)
-        controls.resize(scale: nil)
+        owner.setContentSize(CGSize(width: 800, height: 450))
+        controls.display.fit = .fill
         XCTAssertTrue(model.player.currentItem === item)
         XCTAssertEqual(model.player.rate, 0)
         XCTAssertEqual(model.player.currentTime().seconds, time, accuracy: 0.001)

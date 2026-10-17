@@ -107,17 +107,6 @@ struct VideoMenu: View {
         Picker("Video Scaling", selection: $viewing.display.fit) {
             ForEach(VideoFit.allCases) { Text($0.title).tag($0) }
         }.disabled(!viewing.hasVideo)
-        Picker("Aspect Ratio", selection: $viewing.display.aspect) {
-            ForEach(VideoAspect.allCases) { Text($0.title).tag($0) }
-        }.disabled(!viewing.hasVideo)
-        Divider()
-        Menu("Window Size") {
-            Button("Half Size (50%)") { viewing.resize(scale: 0.5) }
-            Button("Original Size (100%)") { viewing.resize(scale: 1) }
-            Button("Double Size (200%)") { viewing.resize(scale: 2) }
-            Divider()
-            Button("Fit to Screen") { viewing.resize(scale: nil) }
-        }.disabled(!viewing.canResize)
         Divider()
         Menu("Capture Frame") {
             Toggle("Include Subtitles", isOn: $capture.includeSubtitles)

@@ -123,9 +123,8 @@ struct CaptionOverlay: View {
         if media.subtitleSelection == "external", let frame = model.currentSubtitleImage {
             GeometryReader { geometry in
                 let bounds = CGRect(origin: .zero, size: geometry.size)
-                let custom = display.frame(in: bounds)
                 let ratio = videoSize.width > 0 && videoSize.height > 0 ? videoSize.width / videoSize.height : frame.canvas.width / frame.canvas.height
-                let fitted = display.aspect == .original ? subtitleVideoRect(bounds, ratio: ratio, fill: display.fit == .fill) : custom
+                let fitted = subtitleVideoRect(bounds, ratio: ratio, fill: display.fit == .fill)
                 Canvas { context, _ in
                     for part in frame.parts {
                         let r = part.bounds

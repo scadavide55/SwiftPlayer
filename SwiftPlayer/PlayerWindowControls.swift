@@ -8,47 +8,8 @@ nonisolated enum VideoFit: String, CaseIterable, Identifiable {
     var title: String { self == .fit ? "Fit" : "Fill" }
 }
 
-nonisolated enum VideoAspect: String, CaseIterable, Identifiable {
-    case original, widescreen, classic, cinema, square
-    var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .original: return "Original"
-        case .widescreen: return "16:9"
-        case .classic: return "4:3"
-        case .cinema: return "21:9"
-        case .square: return "1:1"
-        }
-    }
-    var ratio: CGFloat? {
-        switch self {
-        case .original: return nil
-        case .widescreen: return 16 / 9
-        case .classic: return 4 / 3
-        case .cinema: return 21 / 9
-        case .square: return 1
-        }
-    }
-}
-
 nonisolated struct VideoDisplayOptions: Equatable {
     var fit: VideoFit = .fit
-    var aspect: VideoAspect = .original
-
-    func frame(in bounds: CGRect) -> CGRect {
-        guard bounds.width.isFinite, bounds.height.isFinite, bounds.width > 0, bounds.height > 0 else { return .zero }
-        guard let ratio = aspect.ratio else { return bounds }
-        let width: CGFloat
-        let height: CGFloat
-        if (bounds.width / bounds.height > ratio) == (fit == .fit) {
-            height = bounds.height
-            width = height * ratio
-        } else {
-            width = bounds.width
-            height = width / ratio
-        }
-        return CGRect(x: bounds.midX - width / 2, y: bounds.midY - height / 2, width: width, height: height)
-    }
 }
 
 @MainActor
@@ -68,7 +29,6 @@ final class PlayerWindowControls: ObservableObject {
     private var generation = UUID()
 
     var hasVideo: Bool { videoSize.width.isFinite && videoSize.height.isFinite && videoSize.width > 0 && videoSize.height > 0 }
-    var canResize: Bool { isAttached && hasVideo && !isFullScreen && !isTransitioning }
     var subtitleReferenceHeight: Double {
         guard hasVideo else { return 360 }
         let bounds = window?.contentView?.bounds.size ?? CGSize(width: 640, height: 360)
@@ -141,34 +101,6 @@ final class PlayerWindowControls: ObservableObject {
                 self.videoSize = size.width.isFinite && size.height.isFinite && size.width > 0 && size.height > 0 ? size : .zero
             }
         }
-    }
-
-    /// 100% maps decoded pixels to display pixels, accounting for Retina scale.
-    /// Screen fitting uses the visible area and includes the window's title bar.
-    func resize(scale: CGFloat?) {
-        guard canResize, let window, let screen = window.screen ?? NSScreen.main else { return }
-        let raw = CGSize(width: display.aspect.ratio.map { videoSize.height * $0 } ?? videoSize.width,
-                         height: videoSize.height)
-        guard let content = Self.contentSize(video: raw, scale: scale, backingScale: window.backingScaleFactor,
-            available: window.contentRect(forFrameRect: screen.visibleFrame).size, minimum: window.contentMinSize) else { return }
-        var frame = window.frameRect(forContentRect: CGRect(origin: .zero, size: content))
-        frame.origin = CGPoint(x: window.frame.midX - frame.width / 2, y: window.frame.midY - frame.height / 2)
-        frame.origin.x = min(max(frame.minX, screen.visibleFrame.minX), screen.visibleFrame.maxX - frame.width)
-        frame.origin.y = min(max(frame.minY, screen.visibleFrame.minY), screen.visibleFrame.maxY - frame.height)
-        window.setFrame(frame, display: true)
-    }
-
-    static func contentSize(video: CGSize, scale: CGFloat?, backingScale: CGFloat,
-                            available: CGSize, minimum: CGSize) -> CGSize? {
-        guard video.width.isFinite, video.height.isFinite, video.width > 0, video.height > 0,
-              backingScale.isFinite, backingScale > 0,
-              available.width.isFinite, available.height.isFinite, available.width > 0, available.height > 0,
-              minimum.width.isFinite, minimum.height.isFinite, minimum.width >= 0, minimum.height >= 0,
-              scale == nil || (scale!.isFinite && scale! > 0) else { return nil }
-        let maximum = min(available.width / video.width, available.height / video.height)
-        let factor = min(scale.map { $0 / backingScale } ?? maximum, maximum)
-        return CGSize(width: min(available.width, max(minimum.width, video.width * factor)),
-                      height: min(available.height, max(minimum.height, video.height * factor)))
     }
 
     private func removeWindowObservers() {

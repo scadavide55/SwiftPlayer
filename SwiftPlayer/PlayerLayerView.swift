@@ -38,8 +38,8 @@ final class PlayerLayerNSView: NSView {
         super.layout()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        playerLayer.videoGravity = display.aspect == .original ? (display.fit == .fit ? .resizeAspect : .resizeAspectFill) : .resize
-        playerLayer.frame = display.frame(in: bounds)
+        playerLayer.videoGravity = display.fit == .fit ? .resizeAspect : .resizeAspectFill
+        playerLayer.frame = bounds
         CATransaction.commit()
         
         if !didNotifyLayerReady, let onLayerReady {
