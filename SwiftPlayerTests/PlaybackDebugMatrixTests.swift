@@ -30,7 +30,7 @@ final class PlaybackDebugMatrixTests: DebugMatrixTestCase {
                         XCTAssertEqual(model.playbackRequested, variant % 2 == 0)
                         XCTAssertEqual(model.player.rate, variant % 2 == 0 ? rates[variant] : 0)
                     case 3:
-                        for invalid: Float in [.nan, .infinity, -.infinity, -1, 0, 5, 100] {
+                        for invalid: Float in [.nan, .infinity, -.infinity, -1, 0, 0.01, 5, 100] {
                             model.playbackRate = invalid
                             XCTAssertEqual(model.playbackRate, rates[variant])
                         }

@@ -66,14 +66,16 @@ struct PlayerCommands: Commands {
                 Button("Clear Menu") { recent.clear() }.disabled(recent.entries.isEmpty)
             }
         }
-        CommandMenu("Playback") {
+        CommandGroup(replacing: .sidebar) {}
+        CommandGroup(replacing: .toolbar) {}
+        CommandMenu("Play") {
             PlaybackMenu(state: window?.menus ?? inactive, preferences: preferences, jump: { window?.jump() })
-        }
-        CommandMenu("Audio") {
-            AudioMenu(state: window?.menus ?? inactive, preferences: preferences)
         }
         CommandMenu("Video") {
             VideoMenu(viewing: window?.viewing ?? inactiveViewing, capture: window?.capture ?? inactiveCapture)
+        }
+        CommandMenu("Audio") {
+            AudioMenu(state: window?.menus ?? inactive, preferences: preferences)
         }
         CommandMenu("Subtitles") {
             SubtitlesMenu(state: window?.menus ?? inactive, preferences: preferences,
@@ -124,11 +126,16 @@ struct PlaybackMenu: View {
     @ObservedObject var preferences: PlayerPreferences
     let jump: () -> Void
     var body: some View {
-        Button(state.snapshot.playbackRequested ? "Pause" : "Play") { state.model?.togglePlayPause() }
+        Button("Play / Pause") { state.model?.togglePlayPause() }
+            .keyboardShortcut(.space, modifiers: [])
             .disabled(!state.snapshot.hasMedia)
         Picker("Speed", selection: Binding(get: { state.snapshot.playbackRate }, set: { state.model?.playbackRate = $0 })) {
             ForEach([Float(0.5), 0.75, 1, 1.25, 1.5, 2, 3, 4], id: \.self) { Text(formatPlaybackRate($0)).tag($0) }
         }.disabled(!state.snapshot.hasMedia)
+        Button("Increase Speed by 0.05×") { state.model?.adjustPlaybackSpeed(direction: 1) }
+            .keyboardShortcut(.upArrow, modifiers: [.control]).disabled(!state.snapshot.hasMedia)
+        Button("Decrease Speed by 0.05×") { state.model?.adjustPlaybackSpeed(direction: -1) }
+            .keyboardShortcut(.downArrow, modifiers: [.control]).disabled(!state.snapshot.hasMedia)
         Divider()
         Button("Jump to Time…", action: jump).keyboardShortcut("j").disabled(!state.snapshot.canNavigate)
         Menu("Chapters") {

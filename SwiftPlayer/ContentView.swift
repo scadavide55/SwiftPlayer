@@ -188,7 +188,8 @@ private struct PlayerContentView: View {
                     onArrowUp: { handleArrowUp() },
                     onVolumeUp: { registerActivity(); systemVolume.increase() },
                     onVolumeDown: { registerActivity(); systemVolume.decrease() },
-                    onFrameStep: { direction in model.stepFrame(direction: direction); registerActivity() }
+                    onFrameStep: { direction in model.stepFrame(direction: direction); registerActivity() },
+                    onSpeedChange: { direction in model.adjustPlaybackSpeed(direction: direction); registerActivity() }
                 ))
                 .onAppear {
                     registerActivity()
@@ -510,6 +511,7 @@ struct KeyEventHandlingView: NSViewRepresentable {
     let onVolumeUp: () -> Void
     let onVolumeDown: () -> Void
     let onFrameStep: (Int) -> Void
+    var onSpeedChange: (Int) -> Void = { _ in }
 
     func makeNSView(context: Context) -> KeyCatcherView {
         let view = KeyCatcherView()
@@ -519,6 +521,7 @@ struct KeyEventHandlingView: NSViewRepresentable {
         view.onVolumeUp = onVolumeUp
         view.onVolumeDown = onVolumeDown
         view.onFrameStep = onFrameStep
+        view.onSpeedChange = onSpeedChange
         return view
     }
 
@@ -529,6 +532,7 @@ struct KeyEventHandlingView: NSViewRepresentable {
         nsView.onVolumeUp = onVolumeUp
         nsView.onVolumeDown = onVolumeDown
         nsView.onFrameStep = onFrameStep
+        nsView.onSpeedChange = onSpeedChange
     }
 
     static func dismantleNSView(_ nsView: KeyCatcherView, coordinator: ()) {
@@ -540,6 +544,7 @@ struct KeyEventHandlingView: NSViewRepresentable {
         nsView.onVolumeUp = nil
         nsView.onVolumeDown = nil
         nsView.onFrameStep = nil
+        nsView.onSpeedChange = nil
     }
 
     final class KeyCatcherView: NSView {
@@ -549,6 +554,7 @@ struct KeyEventHandlingView: NSViewRepresentable {
         var onVolumeUp: (() -> Void)?
         var onVolumeDown: (() -> Void)?
         var onFrameStep: ((Int) -> Void)?
+        var onSpeedChange: ((Int) -> Void)?
         private var keyMonitor: Any?
         private var hasActiveArrow = false
 
@@ -596,6 +602,10 @@ struct KeyEventHandlingView: NSViewRepresentable {
             let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
             if modifiers == .control, event.keyCode == 123 || event.keyCode == 124 {
                 onFrameStep?(event.keyCode == 123 ? -1 : 1)
+                return true
+            }
+            if modifiers == .control, event.keyCode == 126 || event.keyCode == 125 {
+                onSpeedChange?(event.keyCode == 126 ? 1 : -1)
                 return true
             }
             guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty else {

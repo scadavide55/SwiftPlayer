@@ -59,7 +59,7 @@ final class PlayerModel: ObservableObject {
     @Published var playbackFinished: Bool = false
     @Published var playbackRate: Float = 1.0 {
         didSet {
-            guard playbackRate.isFinite, playbackRate > 0, playbackRate <= 4 else {
+            guard playbackRate.isFinite, playbackRate >= 0.05, playbackRate <= 4 else {
                 playbackRate = oldValue
                 return
             }
@@ -467,6 +467,13 @@ final class PlayerModel: ObservableObject {
         if player.currentItem?.status == .readyToPlay { player.rate = playbackRate }
     }
     
+    /// Round on the 1/20 grid so repeated shortcuts do not accumulate Float error.
+    func adjustPlaybackSpeed(direction: Int) {
+        guard direction == -1 || direction == 1 else { return }
+        let step = Int((Double(playbackRate) * 20).rounded()) + direction
+        playbackRate = Float(min(max(step, 1), 80)) / 20
+    }
+
     func canStepFrame(direction: Int) -> Bool {
         guard let item = player.currentItem, item.status == .readyToPlay,
               item.presentationSize.width > 0, item.presentationSize.height > 0 else { return false }
