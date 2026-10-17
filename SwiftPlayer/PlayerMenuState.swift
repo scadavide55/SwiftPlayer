@@ -22,7 +22,6 @@ final class PlayerMenuState: ObservableObject {
         var canStepForward = false
         var playbackRequested = false
         var playbackRate: Float = 1
-        var isMuted = false
         var subtitleSelection = "automatic"
         var audioSelection = "automatic"
         var subtitleDelay: Double = 0
@@ -69,7 +68,6 @@ final class PlayerMenuState: ObservableObject {
             canStepForward: model.canStepFrame(direction: 1),
             playbackRequested: model.playbackRequested,
             playbackRate: model.playbackRate,
-            isMuted: model.isMuted,
             subtitleSelection: media.subtitleSelection,
             audioSelection: media.audioSelection,
             subtitleDelay: media.subtitleDelay,

@@ -73,8 +73,7 @@ final class VolumeBoostTests: DebugMatrixTestCase {
         defer { model.teardown() }
         XCTAssertEqual(model.volume, 0)
         XCTAssertTrue(model.player.isMuted)
-        XCTAssertTrue(model.isMuted, "The mute button must reflect the native zero-volume mute state at startup.")
-        XCTAssertTrue(PlayerMenuState(model: model).snapshot.isMuted)
+        XCTAssertTrue(model.isMuted, "Core mute must reflect native zero-volume mute at startup.")
         model.volume = 0.05
         XCTAssertEqual(model.volume, 0.05, accuracy: 0.001)
         XCTAssertFalse(model.isMuted)
