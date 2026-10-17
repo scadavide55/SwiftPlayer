@@ -131,6 +131,8 @@ final class PlayerModel: ObservableObject {
     private var wasPlayingInReverse = false
     private var seekIdentifier = UUID()
     private(set) var isSeeking = false
+    private var relativeSeekTarget: CMTime?
+    private var relativeSeekLanding: CMTime?
     
     init(preferences: PlayerPreferences? = nil, history: PlaybackHistoryStore? = nil,
          restoreApplicationVolume: Bool = true) {
@@ -239,6 +241,7 @@ final class PlayerModel: ObservableObject {
             // A new native command must also cancel the pending hold timer.
             cancelFastSeekTask()
         }
+        resetRelativeNavigation()
         let requested = rate != 0
         if playbackRequested != requested {
             if !requested { saveHistory(force: true) }
@@ -444,6 +447,7 @@ final class PlayerModel: ObservableObject {
     }
 
     func pause() {
+        resetRelativeNavigation()
         saveHistory(force: true)
         mediaControls.savePosition()
         playbackRequested = false
@@ -454,6 +458,7 @@ final class PlayerModel: ObservableObject {
 
     func play() {
         guard isLoading || player.currentItem?.status == .readyToPlay else { return }
+        resetRelativeNavigation()
         historyCompleted = false
         endFastSeeking()
         playbackRequested = true
@@ -483,6 +488,7 @@ final class PlayerModel: ObservableObject {
     /// Ordinary seeks retain their default tolerance; no nominal-FPS estimate is used.
     func stepFrame(direction: Int) {
         guard canStepFrame(direction: direction), let item = player.currentItem else { return }
+        resetRelativeNavigation()
         // Repeated steps while paused must not force a preferences write per frame.
         if playbackRequested || player.rate != 0 { pause() }
         else { endFastSeeking() }
@@ -499,9 +505,16 @@ final class PlayerModel: ObservableObject {
     }
 
     func seek(to seconds: Double, preservingFinishedHistory: Bool = false, tolerance: Double? = nil) {
+        performSeek(to: seconds, preservingFinishedHistory: preservingFinishedHistory, tolerance: tolerance)
+    }
+
+    private func performSeek(to seconds: Double, preservingFinishedHistory: Bool = false,
+                             tolerance: Double?, relativeTarget: CMTime? = nil) {
         guard seconds.isFinite, duration.isFinite, duration > 0,
               let item = player.currentItem, item.status == .readyToPlay else { return }
         let target = min(max(seconds, 0), duration)
+        relativeSeekTarget = relativeTarget
+        relativeSeekLanding = nil
         seekIdentifier = UUID()
         let identifier = seekIdentifier
         item.cancelPendingSeeks()
@@ -512,36 +525,77 @@ final class PlayerModel: ObservableObject {
         // keeps the completion that was just saved for the finished file.
         if !preservingFinishedHistory { historyCompleted = false }
         updateSubtitleDisplay()
-        // Timeline seeks keep native tolerance. Relative navigation needs a
-        // small non-zero bound so a long GOP cannot swallow an entire jump.
+        // Timeline seeks keep native tolerance. Discrete taps use a tight
+        // bound; continuous held-key repeats allow more decoder flexibility.
         let allowed = tolerance.map { CMTime(seconds: $0, preferredTimescale: 600) } ?? .positiveInfinity
-        player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
+        player.seek(to: relativeTarget ?? CMTime(seconds: target, preferredTimescale: 600),
                     toleranceBefore: allowed, toleranceAfter: allowed) { [weak self, weak item] finished in
             Task { @MainActor [weak self, weak item] in
                 guard let self, let item, self.player.currentItem === item,
                       self.seekIdentifier == identifier else { return }
                 self.isSeeking = false
                 if finished, !self.isScrubbing {
-                    let actual = self.player.currentTime().seconds
+                    let landed = self.player.currentTime()
+                    let actual = landed.seconds
+                    if let relativeTarget, self.relativeSeekTarget == relativeTarget {
+                        self.relativeSeekLanding = landed
+                    }
                     if actual.isFinite { self.currentTime = max(0, actual) }
                     self.updateSubtitleDisplay()
                     if !self.playbackRequested, !self.isFastSeeking { self.saveHistory(force: true) }
+                } else if let relativeTarget, self.relativeSeekTarget == relativeTarget {
+                    self.resetRelativeNavigation()
                 }
             }
         }
     }
 
     @discardableResult
-    func skip(by seconds: Double) -> Double? {
+    func skip(by seconds: Double, precise: Bool = true) -> Double? {
         guard seconds.isFinite, seconds != 0, duration.isFinite, duration > 0,
               player.currentItem?.status == .readyToPlay else { return nil }
-        // Accumulate rapid input against the requested target, but use the
-        // native clock once settled; the UI timestamp is delivered less often.
-        let clock = player.currentTime().seconds
-        let base = isSeeking || isScrubbing || !clock.isFinite ? currentTime : clock
-        let target = min(max(base + seconds, 0), duration)
-        seek(to: target, tolerance: min(0.25, abs(seconds) / 4))
-        return target
+        let clock = player.currentTime()
+        if !precise {
+            let base = isSeeking || isScrubbing || !clock.seconds.isFinite ? currentTime : clock.seconds
+            let target = min(max(base + seconds, 0), duration)
+            seek(to: target, tolerance: min(0.25, abs(seconds) / 4))
+            return target
+        }
+        let base: CMTime
+        if isScrubbing {
+            base = CMTime(seconds: currentTime, preferredTimescale: 600_000)
+        } else if isSeeking || !clock.seconds.isFinite {
+            base = relativeSeekTarget ?? CMTime(seconds: currentTime, preferredTimescale: 600_000)
+        } else if !playbackRequested, player.rate == 0,
+                  let requested = relativeSeekTarget, let landed = relativeSeekLanding,
+                  abs(clock.seconds - landed.seconds) < 0.00001 {
+            // Keep the intended paused sequence, rather than accumulating
+            // small landing offsets. A native seek or frame step rebases it.
+            base = requested
+        } else {
+            base = clock
+        }
+        let clamped = min(max(base.seconds + seconds, 0), duration)
+        let target: CMTime
+        if clamped <= 0 { target = .zero }
+        else if clamped >= duration { target = CMTime(seconds: duration, preferredTimescale: 600_000) }
+        else {
+            // Integer-second jumps preserve the native clock's rational
+            // precision instead of rounding every tap to 1/600 second.
+            let scale: CMTimeScale = seconds.rounded() == seconds
+                && seconds > Double(Int64.min) && seconds < Double(Int64.max) ? 1 : 600_000
+            target = CMTimeAdd(base, CMTime(seconds: seconds, preferredTimescale: scale))
+        }
+        // A small allowance lets HEVC refresh its paused picture at open-GOP
+        // boundaries where zero-tolerance seeks can leave the old frame.
+        // The requested sequence stays exact even when a landing shifts.
+        performSeek(to: target.seconds, tolerance: 0.125, relativeTarget: target)
+        return target.seconds
+    }
+
+    private func resetRelativeNavigation() {
+        relativeSeekTarget = nil
+        relativeSeekLanding = nil
     }
 
     func beginFastSeeking(direction: Int, mode: ArrowSeekMode = .jump) {
@@ -579,7 +633,7 @@ final class PlayerModel: ObservableObject {
                 while !Task.isCancelled {
                     guard let time = self?.currentTime, let duration = self?.duration,
                           direction < 0 ? time > 0 : time < duration else { return }
-                    guard let target = self?.skip(by: jump),
+                    guard let target = self?.skip(by: jump, precise: false),
                           direction < 0 ? target > 0 : target < duration else { return }
                     // Anchor ticks to the press, so time spent handling a
                     // seek does not get added to every 100 ms interval.
@@ -602,6 +656,7 @@ final class PlayerModel: ObservableObject {
         let wasFastSeeking = isFastSeeking
         cancelFastSeekTask()
         guard wasFastSeeking else { return }
+        resetRelativeNavigation()
         if playbackRequested, player.currentItem?.status == .readyToPlay {
             player.rate = playbackRate
         } else {
@@ -741,6 +796,7 @@ final class PlayerModel: ObservableObject {
     }
     /// Call on window close / app termination to release decoder resources immediately.
     func teardown() {
+        resetRelativeNavigation()
         cancelSubtitleImage()
         saveHistory(force: true)
         historySession = nil
