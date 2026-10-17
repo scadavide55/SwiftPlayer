@@ -89,8 +89,7 @@ struct PlayerPreferencesView: View {
                     Text("The volume keys and slider control Mac system volume for all apps, from 0% to 100%.")
                         .font(.caption).foregroundStyle(.secondary)
                     Toggle("Protect audio peaks", isOn: $preferences.limitAudioPeaks)
-                    Toggle("Normalize audio level", isOn: $preferences.normalizeAudio)
-                    Text("Normalization balances quiet and loud passages. Peak protection reduces distortion during processing.")
+                    Text("Peak protection reduces digital peaks and clipping. Output loudness also depends on Mac system volume and the connected speakers or headphones.")
                         .font(.caption).foregroundStyle(.secondary)
                     Toggle("Remember tracks and subtitle timing for each file", isOn: $preferences.rememberFileSettings)
                     Picker("After playback", selection: $preferences.afterPlayback) {

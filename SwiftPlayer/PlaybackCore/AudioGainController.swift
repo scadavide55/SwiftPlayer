@@ -13,8 +13,8 @@ final class AudioGainController {
     }
     deinit { SPAudioGainRelease(state) }
 
-    func configure(limiter: Bool, normalization: Bool) {
-        SPAudioGainSetProcessing(state, limiter, normalization)
+    func configure(limiter: Bool) {
+        SPAudioGainSetLimiter(state, limiter)
     }
 
     func setVolume(_ volume: Float) { SPAudioGainSet(state, max(1, volume)) }

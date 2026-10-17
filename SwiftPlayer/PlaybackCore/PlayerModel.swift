@@ -154,9 +154,9 @@ final class PlayerModel: ObservableObject {
             subtitleStyleObservation = preferences.$useSubtitleFileStyles.dropFirst().sink { [weak self] _ in
                 Task { @MainActor [weak self] in self?.cancelSubtitleImage(); self?.updateSubtitleDisplay() }
             }
-            audioProcessingObservation = preferences.$limitAudioPeaks.combineLatest(preferences.$normalizeAudio)
-                .sink { [weak self] limiter, normalization in
-                    self?.audioGain.configure(limiter: limiter, normalization: normalization)
+            audioProcessingObservation = preferences.$limitAudioPeaks
+                .sink { [weak self] limiter in
+                    self?.audioGain.configure(limiter: limiter)
                 }
         }
         maximumVolume = preferences?.maximumVolume ?? 2
