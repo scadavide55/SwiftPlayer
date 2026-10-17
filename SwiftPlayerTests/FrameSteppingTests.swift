@@ -129,7 +129,7 @@ final class FrameSteppingTests: DebugMatrixTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = PlayerPreferences(defaults: defaults)
-        preferences.afterPlayback = .close
+        preferences.afterPlayback = .repeatFile
         let model = PlayerModel(preferences: preferences)
         defer { model.teardown() }
         try await ready(model, url: url)
@@ -143,7 +143,6 @@ final class FrameSteppingTests: DebugMatrixTestCase {
         model.stepFrame(direction: 1)
         try await Task.sleep(for: .milliseconds(150))
         XCTAssertNotNil(model.player.currentItem)
-        XCTAssertFalse(model.closedAtEnd)
         XCTAssertFalse(model.playbackRequested)
         XCTAssertEqual(model.player.rate, 0)
         model.stepFrame(direction: -1)

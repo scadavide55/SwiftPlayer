@@ -21,12 +21,13 @@ struct ControlsOverlay: View {
             Button {
                 model.togglePlayPause()
             } label: {
-                    Image(systemName: model.playbackRequested ? "pause.fill" : "play.fill")
+                    Image(systemName: model.playbackFinished ? "arrow.counterclockwise" : (model.playbackRequested ? "pause.fill" : "play.fill"))
                     .font(.system(size: 16))
                     .foregroundStyle(.white)
                     .frame(width: 20, height: 20)
             }
             .buttonStyle(.plain)
+            .help(model.playbackFinished ? "Replay" : "Play / Pause (Space)")
             
             Button {
                 model.skip(by: 10)

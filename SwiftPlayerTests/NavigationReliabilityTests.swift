@@ -136,7 +136,7 @@ final class NavigationReliabilityTests: DebugMatrixTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
         let preferences = PlayerPreferences(defaults: defaults)
-        preferences.afterPlayback = .close
+        preferences.afterPlayback = .repeatFile
         let model = try await localPlayer(playing: false, preferences: preferences)
         defer { model.teardown() }
         XCTAssertTrue(try XCTUnwrap(model.player.currentItem).canPlayFastReverse)
@@ -199,7 +199,7 @@ final class NavigationReliabilityTests: DebugMatrixTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
         let preferences = PlayerPreferences(defaults: defaults)
-        preferences.afterPlayback = .close
+        preferences.afterPlayback = .repeatFile
         for playing in [false, true] {
             let model = try await localPlayer(playing: playing, preferences: preferences)
             defer { model.teardown() }
@@ -212,7 +212,6 @@ final class NavigationReliabilityTests: DebugMatrixTestCase {
             XCTAssertTrue(model.isFastSeeking)
             XCTAssertEqual(model.playbackRequested, playing)
             XCTAssertFalse(model.playbackFinished)
-            XCTAssertFalse(model.closedAtEnd)
             XCTAssertNotNil(model.player.currentItem)
             model.endFastSeeking()
             XCTAssertEqual(model.player.rate, playing ? model.playbackRate : 0)

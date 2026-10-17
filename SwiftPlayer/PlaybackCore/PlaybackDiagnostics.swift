@@ -63,8 +63,8 @@ nonisolated struct PlaybackDiagnosticSnapshot: Equatable, Sendable {
                        loading: Bool, failed: Bool, finished: Bool, seeking: Bool) -> PlaybackDiagnosticState {
         if failed || status == .failed { return .failed }
         if loading || (hasItem && status == .unknown) { return .opening }
-        if !hasItem { return .noMedia }
         if finished { return .finished }
+        if !hasItem { return .noMedia }
         if seeking { return .seeking }
         switch timeStatus {
         case .playing: return .playing
@@ -98,7 +98,7 @@ nonisolated struct PlaybackDiagnosticSnapshot: Equatable, Sendable {
             failed: model.playbackFailed, finished: model.playbackFinished,
             seeking: model.isSeeking || model.isScrubbing || model.isFastSeeking)
         if player.timeControlStatus == .waitingToPlayAtSpecifiedRate { result.waitingReason = Self.reason(reason) }
-        result.position = item != nil && time.isFinite && time >= 0 ? time : nil
+        result.position = model.isFinishedUnloaded ? model.currentTime : (item != nil && time.isFinite && time >= 0 ? time : nil)
         result.duration = model.duration.isFinite && model.duration > 0 ? model.duration : nil
         result.selectedRate = model.playbackRate
         result.playerRate = item != nil && player.rate.isFinite ? player.rate : nil

@@ -60,7 +60,7 @@ final class PlayerMenuState: ObservableObject {
     private func refresh() {
         guard let model else { return }
         let media = model.mediaControls
-        let hasMedia = model.player.currentItem != nil && !model.playbackFailed
+        let hasMedia = (model.player.currentItem != nil || model.isFinishedUnloaded) && !model.playbackFailed
         let updated = Snapshot(
             hasMedia: hasMedia,
             canNavigate: hasMedia && model.duration.isFinite && model.duration > 0,

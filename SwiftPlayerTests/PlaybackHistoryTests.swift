@@ -19,6 +19,48 @@ final class PlaybackHistoryTests: DebugMatrixTestCase {
         try super.tearDownWithError()
     }
 
+    func testLastClosedDuplicateWindowWinsInEitherOrderIncludingFinishedWindows() async throws {
+        let store = PlaybackHistoryStore(defaults: defaults)
+        let preferences = PlayerPreferences(defaults: defaults)
+        preferences.resumePlayback = true
+        for reverseOrder in [false, true] {
+            let first = PlayerModel(preferences: preferences, history: store)
+            let second = PlayerModel(preferences: preferences, history: store)
+            defer { first.teardown(); second.teardown() }
+            try await ready(first)
+            try await ready(second)
+            XCTAssertFalse(first.player === second.player)
+            XCTAssertFalse(first.player.currentItem === second.player.currentItem)
+            first.play(); second.play()
+            try await waitUntilCondition { first.isPlaying && second.isPlaying }
+            first.pause(); second.pause()
+            first.seek(to: 6); second.seek(to: 12)
+            try await waitUntilCondition { !first.isSeeking && !second.isSeeking }
+            let earlier = reverseOrder ? second : first
+            let later = reverseOrder ? first : second
+            earlier.teardown()
+            later.teardown()
+            XCTAssertEqual(try XCTUnwrap(store.entries.first).position, reverseOrder ? 6 : 12, accuracy: 0.1)
+            XCTAssertEqual(try XCTUnwrap(preferences.resumeTime(for: audio[1])), reverseOrder ? 6 : 12, accuracy: 0.1)
+            earlier.teardown()
+            XCTAssertEqual(try XCTUnwrap(store.entries.first).position, reverseOrder ? 6 : 12, accuracy: 0.1)
+        }
+        for finishedClosesLast in [false, true] {
+            let finished = PlayerModel(preferences: preferences, history: store)
+            let paused = PlayerModel(preferences: preferences, history: store)
+            defer { finished.teardown(); paused.teardown() }
+            try await ready(finished); try await ready(paused)
+            paused.seek(to: 8)
+            try await waitUntilCondition { !paused.isSeeking }
+            NotificationCenter.default.post(name: .AVPlayerItemDidPlayToEndTime, object: finished.player.currentItem)
+            if finishedClosesLast { paused.teardown(); finished.teardown() }
+            else { finished.teardown(); paused.teardown() }
+            XCTAssertEqual(try XCTUnwrap(store.entries.first).isFinished, finishedClosesLast)
+            if finishedClosesLast { XCTAssertNil(preferences.resumeTime(for: audio[1])) }
+            else { XCTAssertEqual(try XCTUnwrap(preferences.resumeTime(for: audio[1])), 8, accuracy: 0.1) }
+        }
+    }
+
     func testProgressIsThrottledAndClearDisableOrRemoveInvalidateSessions() throws {
         var now = Date()
         let store = PlaybackHistoryStore(defaults: defaults, now: { now })
@@ -150,16 +192,16 @@ final class PlaybackHistoryTests: DebugMatrixTestCase {
         XCTAssertEqual(store.entries.count, 1)
     }
 
-    func testRewindAndPauseAfterNaturalEndPreservesFinishedHistory() async throws {
+    func testUnloadAfterNaturalEndPreservesFinishedHistory() async throws {
         let store = PlaybackHistoryStore(defaults: defaults)
         let preferences = PlayerPreferences(defaults: defaults)
-        preferences.afterPlayback = .rewind
+        preferences.afterPlayback = .stay
         let model = PlayerModel(preferences: preferences, history: store)
         defer { model.teardown() }
         try await ready(model)
         _ = await model.player.seek(to: CMTime(seconds: model.duration - 0.1, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
         model.play()
-        try await waitUntilCondition { model.player.rate == 0 && model.player.currentTime().seconds < 0.5 }
+        try await waitUntilCondition { model.isFinishedUnloaded }
         try await Task.sleep(for: .milliseconds(100))
         XCTAssertTrue(store.entries.first?.isFinished ?? false)
         XCTAssertEqual(store.entries.first?.progress ?? 0, 1, accuracy: 0.01)

@@ -340,7 +340,7 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
         preferences?.savePosition(player.currentTime().seconds, duration: player.currentItem?.duration.seconds ?? 0, for: sourceURL)
     }
 
-    func detach() {
+    func detach(preservingInformation: Bool = false) {
         savePosition()
         restoringMemory = true
         identifier = UUID()
@@ -367,9 +367,11 @@ final class PlayerMediaControls: NSObject, ObservableObject, AVPlayerItemLegible
         audioSelection = "automatic"
         subtitleTracks = []
         audioTracks = []
-        chapters = []
-        streams = []
-        videoFrameRate = nil
+        if !preservingInformation {
+            chapters = []
+            streams = []
+            videoFrameRate = nil
+        }
         captionTimeline.reset()
         embeddedText = ""
         externalSubtitleName = ""

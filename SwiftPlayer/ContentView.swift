@@ -90,13 +90,16 @@ private struct PlayerContentView: View {
         .onChange(of: model.isLoading) { loading in
             if !loading, !model.playbackFailed, model.player.currentItem?.status == .readyToPlay, let url = activeSourceURL {
                 RecentMediaStore.shared.record(url)
+                startSubtitleSearch(automatic: true)
             }
         }
-        .onChange(of: model.sourceURL) { _ in frameCapture.cancel(); startSubtitleSearch(automatic: true) }
+        .onChange(of: model.sourceURL) { _ in frameCapture.cancel(); subtitleSearch.cancel() }
         .onChange(of: subtitleFolders.entries.map(\.id)) { _ in startSubtitleSearch(automatic: !showSubtitleMatches) }
         .onChange(of: preferences.autoFindSubtitles) { _ in startSubtitleSearch(automatic: true) }
         .onChange(of: preferences.subtitleLanguage) { _ in startSubtitleSearch(automatic: true) }
-        .onChange(of: model.closedAtEnd) { closed in if closed { goHome() } }
+        .onChange(of: model.playbackFinished) { finished in
+            if finished { frameCapture.cancel(); subtitleSearch.cancel() }
+        }
         .onAppear {
             displaySleep.attach(model: model, preferences: preferences)
             windowControls.observe(model.player)
@@ -163,6 +166,12 @@ private struct PlayerContentView: View {
                             .padding(16)
                             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                    if model.isFinishedUnloaded {
+                        VStack(spacing: 12) {
+                            Text("Playback finished")
+                            Button("Replay") { model.play() }.buttonStyle(.borderedProminent)
+                        }.frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     CaptionOverlay(model: model, media: model.mediaControls, preferences: preferences,
                                    controlsVisible: controlsVisible, nativeRendering: pipController.isActive,
