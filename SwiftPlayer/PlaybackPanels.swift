@@ -12,16 +12,6 @@ struct SubtitleSelectionPicker: View {
     }
 }
 
-struct AudioSelectionPicker: View {
-    @ObservedObject var media: PlayerMediaControls
-    var body: some View {
-        Picker("Audio track", selection: $media.audioSelection) {
-            Text("Automatic").tag("automatic")
-            ForEach(media.audioTracks) { Text($0.name).tag($0.id) }
-        }
-    }
-}
-
 struct SubtitlePanel: View {
     @ObservedObject var model: PlayerModel
     @ObservedObject var media: PlayerMediaControls
