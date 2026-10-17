@@ -276,7 +276,7 @@ Tested on: MacBook Air 2020 (Intel Core i3, dual-core) and MacBook Air M5 (2026)
 
 ## Usage
 
-1. Launch the app and select a file (or drag one onto the window)
+1. Launch the app to a plain 480 × 640 home panel. Click the large play icon to browse for a video, or drag a file anywhere onto the panel. The three smaller icons open Settings, version information, and the donation page.
 2. Hover your mouse to reveal controls
 3. Controls hide automatically after 5 seconds of inactivity
 4. Use the subtitle panel to load subtitles and adjust delay

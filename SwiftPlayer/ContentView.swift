@@ -114,7 +114,8 @@ private struct PlayerContentView: View {
             frameCapture.attach(model: model, preferences: preferences, viewing: windowControls)
         }
         .onChange(of: pipController.isActive) { active in model.mediaControls.nativeSubtitleRendering = active }
-        .frame(minWidth: 480, minHeight: 320)
+        .frame(minWidth: 480, maxWidth: hasLoadedFile ? .infinity : 480,
+               minHeight: hasLoadedFile ? 320 : 640, maxHeight: hasLoadedFile ? .infinity : 640)
         .overlay(alignment: .bottomTrailing) {
             if frameCapture.isCapturing {
                 ProgressView("Capturing frame…").controlSize(.small).padding(12)
