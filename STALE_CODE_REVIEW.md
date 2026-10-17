@@ -52,8 +52,9 @@ Separate verified cleanup commits:
 A focused PiP run stalled during native attached-layer deallocation. A clean
 retry and the PiP matrix in the full regression run both completed all 100
 scenarios. The pre-change tooltip mismatch was observed in the native
-accessibility tree. Post-change live tooltip inspection remains pending;
-modifier placement was checked in source, and native PiP/controller checks and
+accessibility tree. Post-change inspection in the updated player confirmed
+that the PiP button exposes “Enter Picture in Picture” help and the fullscreen
+control remains labeled “Enter Full Screen.” Native PiP/controller checks and
 the release build passed.
 
 Final results:
