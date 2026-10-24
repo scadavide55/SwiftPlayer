@@ -4,11 +4,18 @@ All notable changes to SwiftPlayer will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-## [2.3] - Coming up 
--Intel optimizations 
--Video history 
--Better UX
--Major re write of the code with less help from ai ( this is why this is taking so long!)
+
+## [2.3.1] -Coming up  - Stable
+ -Apple tvOS version ( beta )
+ -And more!
+
+
+
+## [2.3] - Coming up - Stable
+-Intel optimizations .
+-Video history .
+-Better UX.
+-Major re write of the code with less help from ai ( this is why this is taking so long!).
 ## [2.2] - Stable
 
 ### Added
