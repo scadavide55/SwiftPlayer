@@ -3,170 +3,407 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SwiftPlayer – A lightweight, native Mac video player that doesn't use any dependency.</title>
+<title>SwiftPlayer – A lightweight, native Mac video player with zero dependencies</title>
+<meta name="description" content="SwiftPlayer is a minimal, fully native video and audio player for macOS built with SwiftUI and AVFoundation. No third-party dependencies. Video history, subtitles, Picture in Picture.">
+<meta property="og:title" content="SwiftPlayer – native Mac video player">
+<meta property="og:description" content="Minimal, fully native video and audio player for macOS. Zero dependencies.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0071e3">
 <style>
   :root {
     --bg: #fbfbfd;
+    --bg-alt: #f2f2f7;
     --text: #1d1d1f;
     --subtext: #6e6e73;
     --accent: #0071e3;
+    --accent-hover: #0077ed;
     --card: #ffffff;
     --border: #e5e5ea;
+    --shadow: 0 10px 40px rgba(0, 0, 0, 0.10);
+    --glow: rgba(0, 113, 227, 0.14);
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #000000;
+      --bg-alt: #0c0c0e;
       --text: #f5f5f7;
-      --subtext: #86868b;
+      --subtext: #98989d;
       --accent: #2997ff;
+      --accent-hover: #4aa8ff;
       --card: #1c1c1e;
-      --border: #38383a;
+      --border: #2c2c2e;
+      --shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+      --glow: rgba(41, 151, 255, 0.18);
     }
   }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    max-width: 680px;
-    margin: 4rem auto;
-    padding: 0 1.5rem;
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
     line-height: 1.6;
     color: var(--text);
     background: var(--bg);
+    -webkit-font-smoothing: antialiased;
   }
-  h1 { font-size: 2.5rem; margin-bottom: 0.25rem; letter-spacing: -0.02em; }
-  h2 { margin-top: 2.5rem; font-size: 1.3rem; }
-  .sub { color: var(--subtext); margin-top: 0; font-size: 1.1rem; }
-  .btn {
-    display: inline-block;
-    background: var(--accent);
-    color: white;
-    padding: 0.75rem 1.5rem;
-    border-radius: 8px;
-    text-decoration: none;
-    font-weight: 500;
-    margin: 1rem 0.5rem 1rem 0;
-    transition: opacity 0.2s;
-  }
-  .btn:hover { opacity: 0.85; }
-  .btn.secondary { 
-    background: transparent; 
-    border: 1px solid var(--border); 
-    color: var(--text); 
-  }
-  .note {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1rem 1.25rem;
-    margin: 1.5rem 0;
-    font-size: 0.9rem;
-  }
-  .note strong { display: block; margin-bottom: 0.5rem; }
-  code { 
-    background: var(--border); 
-    padding: 0.15rem 0.4rem; 
-    border-radius: 4px; 
-    font-size: 0.85em; 
-    font-family: ui-monospace, SFMono-Regular, monospace;
-  }
-  ul { padding-left: 1.25rem; }
-  li { margin-bottom: 0.4rem; }
-  footer { margin-top: 3rem; font-size: 0.85rem; color: var(--subtext); border-top: 1px solid var(--border); padding-top: 1.5rem; }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 1.5rem; }
+  code, pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  code { background: var(--border); padding: 0.15rem 0.4rem; border-radius: 5px; font-size: 0.85em; }
+
+  /* Nav */
+  nav {
+    position: sticky; top: 0; z-index: 10;
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    background: color-mix(in srgb, var(--bg) 78%, transparent);
+    border-bottom: 1px solid var(--border);
+  }
+  nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 56px; }
+  nav .brand { font-weight: 700; letter-spacing: -0.01em; color: var(--text); font-size: 1.05rem; }
+  nav .links { display: flex; gap: 1.4rem; font-size: 0.9rem; }
+  nav .links a { color: var(--subtext); }
+  nav .links a:hover { color: var(--text); text-decoration: none; }
+  @media (max-width: 600px) { nav .links a:not(.keep) { display: none; } }
+
+  /* Hero */
+  .hero {
+    text-align: center;
+    padding: 5rem 0 3rem;
+    background: radial-gradient(60% 50% at 50% 0%, var(--glow), transparent 70%);
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.8rem; font-weight: 600;
+    color: var(--accent);
+    background: var(--glow);
+    border-radius: 999px;
+    padding: 0.3rem 0.85rem;
+    margin-bottom: 1.25rem;
+  }
+  h1 {
+    font-size: clamp(2.6rem, 7vw, 4.4rem);
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    margin: 0 0 1rem;
+  }
+  .lead {
+    font-size: clamp(1.1rem, 2.4vw, 1.35rem);
+    color: var(--subtext);
+    max-width: 620px;
+    margin: 0 auto 2rem;
+  }
+  .cta { display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    background: var(--accent);
+    color: #fff;
+    padding: 0.85rem 1.6rem;
+    border-radius: 12px;
+    font-weight: 600;
+    transition: background 0.2s, transform 0.2s;
+  }
+  .btn:hover { background: var(--accent-hover); text-decoration: none; transform: translateY(-1px); }
+  .btn.secondary {
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn.secondary:hover { background: var(--bg-alt); }
+  .meta { margin-top: 1.1rem; font-size: 0.85rem; color: var(--subtext); }
+
+  /* Preview */
+  .preview { margin: 3rem auto 0; max-width: 860px; }
+  .window {
+    border-radius: 14px;
+    overflow: hidden;
+    background: #000;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+  }
+  .window .bar { display: flex; gap: 7px; padding: 11px 14px; background: #1c1c1e; }
+  .window .bar i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .window .bar i:nth-child(1) { background: #ff5f57; }
+  .window .bar i:nth-child(2) { background: #febc2e; }
+  .window .bar i:nth-child(3) { background: #28c840; }
+  .window video { display: block; width: 100%; height: auto; }
+
+  /* Sections */
+  section { padding: 4.5rem 0 0; }
+  h2 { font-size: clamp(1.7rem, 4vw, 2.3rem); letter-spacing: -0.02em; margin: 0 0 0.6rem; line-height: 1.15; }
+  .section-sub { color: var(--subtext); margin: 0 0 2rem; max-width: 600px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.4rem 1.4rem 1.3rem;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .card:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+  .card .icon { font-size: 1.6rem; line-height: 1; margin-bottom: 0.75rem; }
+  .card h3 { margin: 0 0 0.3rem; font-size: 1.05rem; }
+  .card p { margin: 0; color: var(--subtext); font-size: 0.93rem; }
+  .new { font-size: 0.68rem; font-weight: 700; color: #fff; background: var(--accent); padding: 0.1rem 0.45rem; border-radius: 999px; vertical-align: middle; margin-left: 0.35rem; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.25rem 0 1rem; }
+  .chip {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.82rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.25rem 0.65rem;
+  }
+  .label { font-weight: 600; font-size: 0.9rem; color: var(--subtext); margin: 1rem 0 0; }
+
+  /* Steps */
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; counter-reset: step; }
+  .step {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 1.4rem;
+    counter-increment: step;
+  }
+  .step::before {
+    content: counter(step);
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--accent); color: #fff; font-weight: 700; font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+  }
+  .step h3 { margin: 0 0 0.3rem; font-size: 1.05rem; }
+  .step p { margin: 0; color: var(--subtext); font-size: 0.93rem; }
+
+  details {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 0 1.25rem;
+    margin-top: 1rem;
+  }
+  summary { cursor: pointer; padding: 1rem 0; font-weight: 600; list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; color: var(--subtext); font-size: 1.3rem; line-height: 1; transition: transform 0.2s; }
+  details[open] > summary::after { transform: rotate(45deg); }
+  details .body { padding: 0 0 1.1rem; font-size: 0.93rem; }
+  details .body ul { margin: 0.4rem 0 0; padding-left: 1.2rem; }
+  details .body li { margin-bottom: 0.4rem; }
+  .tag { font-size: 0.75rem; font-weight: 600; color: var(--subtext); border: 1px solid var(--border); border-radius: 999px; padding: 0.1rem 0.55rem; margin-left: 0.5rem; }
+  .tag.latest { color: var(--accent); border-color: var(--accent); }
+
+  .note { background: var(--card); border: 1px solid var(--border); border-left: 4px solid #ff9f0a; border-radius: 12px; padding: 1rem 1.25rem; margin-top: 1.25rem; font-size: 0.93rem; }
+  .note ul { margin: 0.5rem 0 0; padding-left: 1.2rem; }
+  .note li { margin-bottom: 0.4rem; }
+
+  /* Code */
+  .codeblock { position: relative; margin: 1rem 0 0; }
+  pre { margin: 0; background: #1c1c1e; color: #f5f5f7; border-radius: 12px; padding: 1.1rem 1.25rem; overflow-x: auto; font-size: 0.86rem; line-height: 1.6; border: 1px solid var(--border); }
+  .copy {
+    position: absolute; top: 0.6rem; right: 0.6rem;
+    font: inherit; font-size: 0.75rem; font-weight: 600;
+    color: #f5f5f7; background: rgba(255,255,255,0.12);
+    border: 0; border-radius: 7px; padding: 0.3rem 0.65rem; cursor: pointer;
+  }
+  .copy:hover { background: rgba(255,255,255,0.22); }
+
+  .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; }
+
+  footer {
+    margin-top: 5rem;
+    background: var(--bg-alt);
+    border-top: 1px solid var(--border);
+    font-size: 0.88rem; color: var(--subtext);
+  }
+  footer .cols { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 2rem; padding: 3rem 0 2rem; }
+  @media (max-width: 700px) { footer .cols { grid-template-columns: 1fr 1fr; } footer .about { grid-column: 1 / -1; } }
+  footer .about strong { display: block; color: var(--text); font-size: 1.05rem; letter-spacing: -0.01em; margin-bottom: 0.4rem; }
+  footer .about p { margin: 0; max-width: 340px; }
+  footer h4 { margin: 0 0 0.7rem; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text); }
+  footer ul { list-style: none; margin: 0; padding: 0; }
+  footer li { margin-bottom: 0.45rem; }
+  footer li a { color: var(--subtext); }
+  footer li a:hover { color: var(--accent); text-decoration: none; }
+  footer .bottom { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem; padding: 1.25rem 0 2rem; border-top: 1px solid var(--border); font-size: 0.82rem; }
 </style>
 </head>
 <body>
-  <h1>SwiftPlayer</h1>
-  <p class="sub">A lightweight, fully native video and audio player for macOS.</p>
 
-  <p>Built entirely with SwiftUI and AVFoundation. No third-party dependencies—just Apple's own frameworks.</p>
-
-  <a class="btn" href="https://github.com/scadavide55/SwiftPlayer/releases/download/v2.3/SwiftPlayer-2.3.dmg">Download the .dmg file for v2.3 </a>
-  <a class="btn secondary" href="https://github.com/scadavide55/SwiftPlayer">View on GitHub</a>
-
-  <video controls muted playsinline style="width:100%; border-radius:10px; margin:1.5rem 0; border:1px solid var(--border);">
-    <source src="preview.mp4" type="video/mp4">
-  </video>
-
-  <h2>Features</h2>
-  <ul>
-    <li>Zero dependencies – Pure Swift</li>
-    <li>Hardware-accelerated decoding via AVFoundation/VideoToolbox</li>
-    <li>Subtitle support: SRT, VTT, ASS/SSA with adjustable delay</li>
-    <li>Minimal UI that fades away when idle</li>
-    <li>Drag &amp; drop, keyboard navigation, and space to play/pause</li>
-    <li>Video history: reopen recent files and resume where you stopped</li>
-    <li>Picture in Picture, playback speed, skip buttons, and volume controls</li>
-  </ul>
-
-  <h2>Supported Formats</h2>
-  <p><strong>Video:</strong> MP4, MOV, M4V<br>
-  <strong>Audio:</strong> MP3, M4A, AAC, WAV, AIFF, CAF</p>
-
-  <h2>Installation</h2>
-  <ol>
-    <li>Download the latest <code>SwiftPlayer.*.*.app.zip or SwiftPlayer-*.*.dmg</code> from the Releases page.</li>
-    <li>Move it to your Applications folder and launch it.</li>
-  </ol>
-
-  <div class="note">
-    <strong>⚠️ First launch note</strong>
-    <p style="margin:0;">The app is ad-hoc signed, so macOS Gatekeeper will block the first launch. To open it:</p>
-    <ul style="margin: 0.5rem 0 0;">
-      <li><strong>macOS 15 (Sequoia) or later:</strong> Launch the app and dismiss the warning. Open <strong>System Settings → Privacy &amp; Security</strong>, scroll down, and click <strong>Open Anyway</strong> next to SwiftPlayer.</li>
-      <li><strong>macOS 13–14:</strong> Right-click the app in Finder and choose <strong>Open</strong>, then <strong>Open</strong> again.</li>
-      <li><strong>Any version:</strong> Run <code>xattr -dr com.apple.quarantine /Applications/SwiftPlayer.app</code></li>
-    </ul>
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#top">SwiftPlayer</a>
+    <div class="links">
+      <a href="#features">Features</a>
+      <a href="#install">Install</a>
+      <a href="#changelog">Changelog</a>
+      <a class="keep" href="https://github.com/scadavide55/SwiftPlayer">GitHub</a>
+    </div>
   </div>
+</nav>
 
-  <h2>Compatibility</h2>
-  <p>Runs on both Apple Silicon and Intel Macs. Minimum macOS version: 13.0 (Ventura).</p>
+<header class="hero" id="top">
+  <div class="wrap">
+    <span class="badge">Version 2.3 is out</span>
+    <h1>The Mac player that<br>stays out of your way.</h1>
+    <p class="lead">A lightweight, fully native video and audio player for macOS. Built with SwiftUI and AVFoundation. No third-party dependencies, just Apple's own frameworks.</p>
+    <div class="cta">
+      <a class="btn" href="https://github.com/scadavide55/SwiftPlayer/releases/download/v2.3/SwiftPlayer-2.3.dmg">Download for Mac (.dmg)</a>
+      <a class="btn secondary" href="https://github.com/scadavide55/SwiftPlayer/releases/download/v2.3/SwiftPlayer-2.3.app.zip">.app.zip</a>
+      <a class="btn secondary" href="https://github.com/scadavide55/SwiftPlayer">View on GitHub</a>
+    </div>
+    <p class="meta">Free and open source (MIT) · Apple Silicon and Intel · macOS 13 Ventura or later</p>
 
-  <h2>Build from Source</h2>
-  <p>Requires Xcode 16+ and macOS 13.0+.</p>
-  <pre><code>git clone https://github.com/scadavide55/SwiftPlayer.git
+    <div class="preview">
+      <div class="window">
+        <div class="bar"><i></i><i></i><i></i></div>
+        <video controls muted playsinline preload="metadata">
+          <source src="preview.mp4" type="video/mp4">
+        </video>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section id="features">
+    <h2>Everything you need. Nothing you don't.</h2>
+    <p class="section-sub">A small, fast player that fades away when idle, so the focus stays on your content.</p>
+    <div class="grid">
+      <div class="card"><div class="icon">🕘</div><h3>Video history <span class="new">NEW</span></h3><p>Recent files on the start screen. Reopen one and playback resumes where you stopped.</p></div>
+      <div class="card"><div class="icon">✨</div><h3>Modern interface <span class="new">NEW</span></h3><p>Frosted-glass controls, a scrubber that grows on hover, and a clean start screen.</p></div>
+      <div class="card"><div class="icon">⚡️</div><h3>Hardware-accelerated</h3><p>Decoding runs through AVFoundation and VideoToolbox for smooth, power-efficient playback.</p></div>
+      <div class="card"><div class="icon">💬</div><h3>Subtitles</h3><p>SRT, VTT and ASS/SSA with an adjustable delay and a show/hide toggle.</p></div>
+      <div class="card"><div class="icon">🪟</div><h3>Picture in Picture</h3><p>Pop the video into a floating window that keeps playing while you use other apps.</p></div>
+      <div class="card"><div class="icon">⏩</div><h3>Speed and skipping</h3><p>0.5× to 2× playback, 10-second skip buttons, and real reverse playback.</p></div>
+      <div class="card"><div class="icon">⌨️</div><h3>Keyboard first</h3><p>Space to play and pause, arrows to seek, up and down for volume. Or just drag and drop a file.</p></div>
+      <div class="card"><div class="icon">📦</div><h3>Zero dependencies</h3><p>Pure Swift. Nothing else running in the background, just what's needed to play.</p></div>
+    </div>
+
+    <p class="label">Video</p>
+    <div class="chips"><span class="chip">MP4</span><span class="chip">MOV</span><span class="chip">M4V</span></div>
+    <p class="label" style="margin-top:0">Audio</p>
+    <div class="chips"><span class="chip">MP3</span><span class="chip">M4A</span><span class="chip">AAC</span><span class="chip">WAV</span><span class="chip">AIFF</span><span class="chip">CAF</span></div>
+  </section>
+
+  <section id="install">
+    <h2>Install in a minute</h2>
+    <p class="section-sub">Ad-hoc signed, so macOS asks for one extra confirmation on first launch.</p>
+    <div class="steps">
+      <div class="step"><h3>Download</h3><p>Get the <code>.dmg</code> or <code>.app.zip</code> from the <a href="https://github.com/scadavide55/SwiftPlayer/releases">Releases page</a>.</p></div>
+      <div class="step"><h3>Move to Applications</h3><p>Drag SwiftPlayer into your Applications folder.</p></div>
+      <div class="step"><h3>Launch it</h3><p>Open it, then approve it once (see below). After that it opens normally.</p></div>
+    </div>
+
+    <div class="note">
+      <strong>First launch: macOS Gatekeeper</strong>
+      <ul>
+        <li><strong>macOS 15 (Sequoia) or later:</strong> launch the app and dismiss the warning. Open <strong>System Settings → Privacy &amp; Security</strong>, scroll down and click <strong>Open Anyway</strong> next to SwiftPlayer.</li>
+        <li><strong>macOS 13–14:</strong> right-click the app in Finder, choose <strong>Open</strong>, then <strong>Open</strong> again.</li>
+        <li><strong>Any version:</strong> run <code>xattr -dr com.apple.quarantine /Applications/SwiftPlayer.app</code></li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="source">
+    <h2>Build from source</h2>
+    <p class="section-sub">Requires Xcode 16+ and macOS 13.0+.</p>
+    <div class="codeblock">
+      <button class="copy" type="button" aria-label="Copy commands">Copy</button>
+<pre><code id="src">git clone https://github.com/scadavide55/SwiftPlayer.git
 cd SwiftPlayer
 open SwiftPlayer.xcodeproj</code></pre>
+    </div>
+  </section>
 
-  <h2>Changelog</h2>
-  <h3 style="margin-bottom: 0.25rem;">2.3 — Stable</h3>
-  <p style="color: var(--subtext); margin-top: 0;"><em>Latest</em></p>
-  <ul>
-    <li>Video history: recent files on the start screen, with resume where you stopped</li>
-    <li>More modern UI: frosted-glass controls, hover-expanding scrubber, redesigned start screen</li>
-    <li>Intel Mac stability and performance fixes: smoother seeking, fewer redraws</li>
-    <li>Subtitles load in the background; UTF-16, Windows-1252, and Windows line endings supported</li>
-    <li>Fixed ASS/SSA 3-digit millisecond timestamps (regression)</li>
-    <li>Fixed speed change resuming paused playback</li>
-  </ul>
+  <section id="changelog">
+    <h2>Changelog</h2>
+    <p class="section-sub">Up next: an Apple tvOS version (beta).</p>
 
-  <h3 style="margin-bottom: 0.25rem;">2.2 — Stable</h3>
-  <p style="color: var(--subtext); margin-top: 0;"><em>Previous</em></p>
-  <ul>
-    <li>Picture in Picture support</li>
-    <li>Playback speed control (0.5× – 2×)</li>
-    <li>Skip buttons (⏪ 10s / ⏩ 10s)</li>
-    <li>Volume slider and mute toggle</li>
-    <li>Volume keyboard shortcuts (↑ / ↓)</li>
-    <li>Faster, smoother seeking — thanks to u/Casfaber_ on Reddit for the suggestion</li>
-    <li>Play/pause state now fully synced with playback</li>
-    <li>Filename display, subtitle toggle, and state cleanup on Go Home</li>
-    <li>Fullscreen button in the top-right corner</li>
-  </ul>
+    <details open>
+      <summary><span>2.3<span class="tag latest">Latest</span></span></summary>
+      <div class="body"><ul>
+        <li>Video history: recent files on the start screen, with resume where you stopped</li>
+        <li>More modern UI: frosted-glass controls, hover-expanding scrubber, redesigned start screen</li>
+        <li>Intel Mac stability and performance fixes: smoother seeking, fewer redraws</li>
+        <li>Subtitles load in the background; UTF-16, Windows-1252 and Windows line endings supported</li>
+        <li>Fixed ASS/SSA 3-digit millisecond timestamps</li>
+        <li>Fixed speed change resuming paused playback</li>
+      </ul></div>
+    </details>
 
-  <h3 style="margin-bottom: 0.25rem;">2.1.1 — Stable</h3>
-  <p style="color: var(--subtext); margin-top: 0;"><em>Older</em></p>
-  <ul>
-    <li>Real reverse playback via AVPlayer's negative rate</li>
-    <li>Subtitle timestamp fix (ASS/SSA 3-digit milliseconds)</li>
-    <li>Full Xcode project published to GitHub</li>
-    <li>Unit tests for SRT, VTT, and ASS/SSA parsers</li>
-  </ul>
+    <details>
+      <summary><span>2.2<span class="tag">Previous</span></span></summary>
+      <div class="body"><ul>
+        <li>Picture in Picture support</li>
+        <li>Playback speed control (0.5× – 2×)</li>
+        <li>Skip buttons (⏪ 10s / ⏩ 10s)</li>
+        <li>Volume slider, mute toggle and ↑ / ↓ shortcuts</li>
+        <li>Faster, smoother seeking. Thanks to u/Casfaber_ on Reddit for the suggestion</li>
+        <li>Play/pause state now fully synced with playback</li>
+        <li>Filename display, subtitle toggle, and state cleanup on Go Home</li>
+        <li>Fullscreen button in the top-right corner</li>
+      </ul></div>
+    </details>
 
-  <p><a href="https://github.com/scadavide55/SwiftPlayer/releases">See all releases on GitHub →</a></p>
+    <details>
+      <summary><span>2.1.1<span class="tag">Older</span></span></summary>
+      <div class="body"><ul>
+        <li>Real reverse playback via AVPlayer's negative rate</li>
+        <li>Subtitle timestamp fix (ASS/SSA 3-digit milliseconds)</li>
+        <li>Full Xcode project published to GitHub</li>
+        <li>Unit tests for SRT, VTT and ASS/SSA parsers</li>
+      </ul></div>
+    </details>
 
-  <footer>
-    <p>Released under the MIT License. Built with Swift using Xcode. This  page might not be up-to-date  , always check the repo page for new versions .  This page was made with the help of generative AI , but the text is entierly human.  Gen-AI for coding ( or "vibe-coding" )  was only used for  debugging and deciding how to implement complex functions . Design and main code are 100% Human made . </p>
-  </footer>
+    <p style="margin-top:1.25rem"><a href="https://github.com/scadavide55/SwiftPlayer/releases">See all releases on GitHub →</a></p>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="cols">
+      <div class="about">
+        <strong>SwiftPlayer</strong>
+        <p>A lightweight, fully native video and audio player for macOS. Free and open source.</p>
+      </div>
+      <div>
+        <h4>Project</h4>
+        <ul>
+          <li><a href="https://github.com/scadavide55/SwiftPlayer">GitHub</a></li>
+          <li><a href="https://github.com/scadavide55/SwiftPlayer/releases">Releases</a></li>
+          <li><a href="https://github.com/scadavide55/SwiftPlayer/issues">Report an issue</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="#install">Install</a></li>
+          <li><a href="https://github.com/scadavide55/SwiftPlayer/blob/main/CHANGELOG.md">Full changelog</a></li>
+          <li><a href="https://github.com/scadavide55/SwiftPlayer/blob/main/LICENSE">MIT License</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="bottom">
+      <span>Released under the MIT License. Built with Swift and Xcode.</span>
+      <span>This page may not be up to date. Check the repo for the latest version.</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  document.querySelector('.copy').addEventListener('click', function () {
+    var btn = this;
+    var text = document.getElementById('src').textContent;
+    var done = function () { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1600); };
+    try { navigator.clipboard.writeText(text).then(done, function () {}); } catch (e) {}
+  });
+</script>
 </body>
 </html>
