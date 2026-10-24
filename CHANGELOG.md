@@ -5,7 +5,7 @@ All notable changes to SwiftPlayer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.3] - Unreleased
+## [2.3] - Stable
 
 ### Added
 - Video history — the file select screen lists recently opened files with a progress bar. Click one to reopen it. Right-click to remove an entry, or use Clear. Keeps the last 20.
@@ -62,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial stable release. Universal binary (Apple Silicon and Intel), minimum macOS 13.0 (Ventura).
 
+[2.3]: https://github.com/scadavide55/SwiftPlayer/releases/tag/v2.3
 [2.2]: https://github.com/scadavide55/SwiftPlayer/releases/tag/v2.2
 [2.1.1]: https://github.com/scadavide55/SwiftPlayer/releases/tag/v2.1.1
 [2.1.0]: https://github.com/scadavide55/SwiftPlayer/releases/tag/v2.1.0

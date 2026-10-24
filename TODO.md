@@ -1,4 +1,4 @@
-2.3 
+2.3 — done
 
 -Picture in Picture support improved ✅ done
 -APPLE tvOS version ( the thing that's requiring most of the time) ⏭ moved to 2.4
@@ -7,3 +7,8 @@
 -More modern UI✅
 -Video history✅
 -.mkv support ( maybe)❌
+
+2.4
+
+-APPLE tvOS version ( the thing that's requiring most of the time)❌
+

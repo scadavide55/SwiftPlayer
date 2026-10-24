@@ -8,9 +8,9 @@
 
 A minimal, fully native video and audio player for macOS built entirely with SwiftUI and AVFoundation. No third-party dependencies—just Apple's own frameworks.
 
-# Version 2.3 coming soon!
+# Version 2.3
 
-New in 2.3: video history with resume, a more modern UI, and Intel stability/performance fixes. See the [changelog](CHANGELOG.md).
+Video history with resume, a more modern UI, and Intel stability/performance fixes. See the [changelog](CHANGELOG.md).
 
 ## Features
 
@@ -87,13 +87,15 @@ Tested on: MacBook Air 2020 (Intel Core i3, dual-core) and MacBook Air M5 (2026)
 
 1. Launch the app and select a file (or drag one onto the window)
 2. Hover your mouse to reveal controls
-3. Controls hide automatically after 5 seconds of inactivity
-4. Use the subtitle panel to load subtitles and adjust delay
+3. Reopen recent files from the start screen; playback resumes where you stopped
+4. Controls hide automatically after 5 seconds of inactivity
+5. Use the subtitle panel to load subtitles and adjust delay
 
 ## Keyboard Shortcuts
 
 - **Space** – Play/pause
 - **Left/Right Arrow** – Jump back/forward 5 seconds (hold to fast-seek)
+- **Up/Down Arrow** – Volume up/down
 - **Home button** – Return to file selection screen
 
 ## License
