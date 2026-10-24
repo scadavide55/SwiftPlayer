@@ -24,7 +24,11 @@ final class PlayerLayerNSView: NSView {
     
     override func layout() {
         super.layout()
+        // Implicit CALayer animations make the video lag behind live window resizes.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         playerLayer.frame = bounds
+        CATransaction.commit()
         
         if !didNotifyLayerReady, let onLayerReady {
             didNotifyLayerReady = true

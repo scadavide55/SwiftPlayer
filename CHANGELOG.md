@@ -5,6 +5,27 @@ All notable changes to SwiftPlayer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3] - Unreleased
+
+### Added
+- Video history — the file select screen lists recently opened files with a progress bar. Click one to reopen it. Right-click to remove an entry, or use Clear. Keeps the last 20.
+- Resume playback — SwiftPlayer remembers where you stopped and continues from there when you reopen a file. Files you finished start from the beginning.
+
+### Changed
+- More modern UI — frosted-glass floating controls bar and buttons, scrubber that grows with a handle on hover, redesigned file select screen. The app now always uses the dark appearance.
+- Subtitle files are parsed off the main thread, so large files no longer freeze the UI. Non-UTF-8 files (UTF-16, Windows-1252, Latin-1) are decoded.
+- Seeks are coalesced: while one is in flight only the latest target is kept. Cuts decoder churn when scrubbing, skipping or holding the arrow keys, mainly on Intel Macs.
+- Mouse-move handling is throttled and unchanged state is no longer republished every tick, reducing redraws.
+
+### Fixed
+- Changing playback speed while paused no longer resumes playback.
+- The selected playback speed is now applied when a new file starts.
+- The mouse cursor could stay hidden after returning to the file select screen.
+- Subtitle files with Windows (CRLF) line endings parsed to no cues.
+- ASS/SSA 3-digit millisecond timestamps were parsed 10x too large (regression of the 2.1.1 fix).
+- A notification observer leaked on every file load.
+- Video no longer lags behind live window resizes.
+
 ## [2.2] - Stable
 
 ### Added

@@ -131,6 +131,26 @@ final class SubtitleParserTests: XCTestCase {
         XCTAssertEqual(cues[0].start, 5.0, accuracy: 0.0001)
     }
 
+    func testSRTWithCRLFLineEndings() throws {
+        let srt = "1\r\n00:00:01,000 --> 00:00:02,000\r\nFirst\r\n\r\n2\r\n00:00:03,000 --> 00:00:04,000\r\nSecond\r\n"
+        let cues = try parse(srt, as: "srt")
+
+        XCTAssertEqual(cues.count, 2)
+        XCTAssertEqual(cues[0].text, "First")
+        XCTAssertEqual(cues[1].text, "Second")
+    }
+
+    func testLatin1EncodedSubtitleIsDecoded() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("srt")
+        let srt = "1\n00:00:01,000 --> 00:00:02,000\ncaf\u{E9}\n"
+        try XCTUnwrap(srt.data(using: .isoLatin1)).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        XCTAssertEqual(parseSubtitles(from: url).first?.text, "café")
+    }
+
     // MARK: - Dispatch / helpers
 
     func testUnsupportedExtensionReturnsNoCues() throws {

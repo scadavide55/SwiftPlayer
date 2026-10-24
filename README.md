@@ -10,6 +10,8 @@ A minimal, fully native video and audio player for macOS built entirely with Swi
 
 # Version 2.3 coming soon!
 
+New in 2.3: video history with resume, a more modern UI, and Intel stability/performance fixes. See the [changelog](CHANGELOG.md).
+
 ## Features
 
 - **Zero dependencies** – Pure Swift using only AVFoundation and SwiftUI
@@ -17,6 +19,7 @@ A minimal, fully native video and audio player for macOS built entirely with Swi
 - **Intuitive controls** – Play/pause, scrubber with time display, and keyboard shortcuts
 - **Subtitle support** – SRT, VTT, and ASS/SSA formats with adjustable delay
 - **Minimal UI** – Clean interface that fades away when idle, keeps focus on your content
+- **Video history** – Recent files on the start screen, each resumes where you stopped
 - **Drag & drop** – Load media by dragging files directly onto the window
 - **Keyboard navigation** – Arrow keys for seeking (5-second jumps or continuous fast-forward/reverse), space to play/pause
 
