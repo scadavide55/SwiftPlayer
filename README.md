@@ -8,6 +8,8 @@
 
 A minimal, fully native video and audio player for macOS built entirely with SwiftUI and AVFoundation. No third-party dependencies—just Apple's own frameworks.
 
+# Version 2.3 coming soon!
+
 ## Features
 
 - **Zero dependencies** – Pure Swift using only AVFoundation and SwiftUI
