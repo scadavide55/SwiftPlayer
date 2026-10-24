@@ -1,0 +1,480 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1493EBCFD186E566DCBAFDDF /* SwiftPlayerTVApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3626C0D4C71142467AB40F9A /* SwiftPlayerTVApp.swift */; };
+		239D6E46606FE16975436B61 /* PlayerScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84682FBE4B0CA16EDFC4FC5E /* PlayerScreen.swift */; };
+		245B98510AF8A8C00DB42ACD /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5D273A5B5508706793DFD6AB /* Assets.xcassets */; };
+		3756B60A1DAD29EFB112818E /* DownloadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFC3619AAD35CDFF2C363C35 /* DownloadManager.swift */; };
+		43C98261607A62F7E4F2BBF2 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38F1640A18664A254B86DE97 /* ContentView.swift */; };
+		449B182EBFDB9C3BC96C2024 /* ThumbnailProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 798AAE94381CECE43291E160 /* ThumbnailProvider.swift */; };
+		5A66A06B612F12323645DE4E /* PlayerModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF8D81A3F2EAC51551116D55 /* PlayerModel.swift */; };
+		65E27942C78B9F2BDB666B8F /* LocalFileServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 492A18FC3110BEB900841F16 /* LocalFileServer.swift */; };
+		65F97938C6380EADF035C546 /* LocalFilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE4177B432414A3EE685000F /* LocalFilesView.swift */; };
+		7CDEBEBB69C7C6738B62B4E0 /* SwiftPlayerTVTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AFE4BAE5584670BBF7C9178 /* SwiftPlayerTVTests.swift */; };
+		83C256556D5B194D211BB45A /* PlaybackProgressStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96C064D346FC980AB80746CC /* PlaybackProgressStore.swift */; };
+		8AD854EC9F7CE7D29E61FEC5 /* QRCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBF5C3606026E8978DC80A3F /* QRCodeView.swift */; };
+		97C10B442258DE53695FC551 /* LocalLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4153B79417636FBBA4CF829 /* LocalLibrary.swift */; };
+		A15C98F60BDFB2F0FB978529 /* AddStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 671B0E1E4D6532ADD221486E /* AddStreamView.swift */; };
+		B315BA8DE5D53F5AAA1A0007 /* VideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B80AABDD06A2FE957415A80B /* VideoPlayerView.swift */; };
+		DD6CD6DAE0D93BF45A5D1B4D /* DownloadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2824A5275EBD9392984C13C9 /* DownloadView.swift */; };
+		EF9C4C41FD6AA99D37D6C74C /* MediaLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6B93EC6FD7713A091D6AB27 /* MediaLibrary.swift */; };
+		F03461B0208A9794BB1910A5 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA8798555BB63D0CA452B3D6 /* HomeView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		6D82B42663D21732CFDD2739 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DB69DA39949B236C1DE29C9F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3F15696A8FA9360CBE8DDF01;
+			remoteInfo = SwiftPlayerTV;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		2824A5275EBD9392984C13C9 /* DownloadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadView.swift; sourceTree = "<group>"; };
+		29203445D3CFEEF9385733FC /* SwiftPlayerTVTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SwiftPlayerTVTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		3626C0D4C71142467AB40F9A /* SwiftPlayerTVApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftPlayerTVApp.swift; sourceTree = "<group>"; };
+		38F1640A18664A254B86DE97 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		492A18FC3110BEB900841F16 /* LocalFileServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalFileServer.swift; sourceTree = "<group>"; };
+		4AFE4BAE5584670BBF7C9178 /* SwiftPlayerTVTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftPlayerTVTests.swift; sourceTree = "<group>"; };
+		5D273A5B5508706793DFD6AB /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		671B0E1E4D6532ADD221486E /* AddStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddStreamView.swift; sourceTree = "<group>"; };
+		798AAE94381CECE43291E160 /* ThumbnailProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailProvider.swift; sourceTree = "<group>"; };
+		84682FBE4B0CA16EDFC4FC5E /* PlayerScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerScreen.swift; sourceTree = "<group>"; };
+		96C064D346FC980AB80746CC /* PlaybackProgressStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackProgressStore.swift; sourceTree = "<group>"; };
+		A6B93EC6FD7713A091D6AB27 /* MediaLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLibrary.swift; sourceTree = "<group>"; };
+		B4153B79417636FBBA4CF829 /* LocalLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLibrary.swift; sourceTree = "<group>"; };
+		B80AABDD06A2FE957415A80B /* VideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPlayerView.swift; sourceTree = "<group>"; };
+		BA8798555BB63D0CA452B3D6 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		BE4177B432414A3EE685000F /* LocalFilesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalFilesView.swift; sourceTree = "<group>"; };
+		BF8D81A3F2EAC51551116D55 /* PlayerModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerModel.swift; sourceTree = "<group>"; };
+		C6F924AB1EBD7263C1363010 /* SwiftPlayerTV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SwiftPlayerTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CBF5C3606026E8978DC80A3F /* QRCodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRCodeView.swift; sourceTree = "<group>"; };
+		EFC3619AAD35CDFF2C363C35 /* DownloadManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadManager.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		6012AD7E4F33344C80263E2B /* SwiftPlayerTVTests */ = {
+			isa = PBXGroup;
+			children = (
+				4AFE4BAE5584670BBF7C9178 /* SwiftPlayerTVTests.swift */,
+			);
+			path = SwiftPlayerTVTests;
+			sourceTree = "<group>";
+		};
+		7809FDACB329DD5BB250A7A8 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				C6F924AB1EBD7263C1363010 /* SwiftPlayerTV.app */,
+				29203445D3CFEEF9385733FC /* SwiftPlayerTVTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		C085FC8ACB8A08D464E4AAB7 /* SwiftPlayerTV */ = {
+			isa = PBXGroup;
+			children = (
+				671B0E1E4D6532ADD221486E /* AddStreamView.swift */,
+				5D273A5B5508706793DFD6AB /* Assets.xcassets */,
+				38F1640A18664A254B86DE97 /* ContentView.swift */,
+				EFC3619AAD35CDFF2C363C35 /* DownloadManager.swift */,
+				2824A5275EBD9392984C13C9 /* DownloadView.swift */,
+				BA8798555BB63D0CA452B3D6 /* HomeView.swift */,
+				492A18FC3110BEB900841F16 /* LocalFileServer.swift */,
+				BE4177B432414A3EE685000F /* LocalFilesView.swift */,
+				B4153B79417636FBBA4CF829 /* LocalLibrary.swift */,
+				A6B93EC6FD7713A091D6AB27 /* MediaLibrary.swift */,
+				96C064D346FC980AB80746CC /* PlaybackProgressStore.swift */,
+				BF8D81A3F2EAC51551116D55 /* PlayerModel.swift */,
+				84682FBE4B0CA16EDFC4FC5E /* PlayerScreen.swift */,
+				CBF5C3606026E8978DC80A3F /* QRCodeView.swift */,
+				3626C0D4C71142467AB40F9A /* SwiftPlayerTVApp.swift */,
+				798AAE94381CECE43291E160 /* ThumbnailProvider.swift */,
+				B80AABDD06A2FE957415A80B /* VideoPlayerView.swift */,
+			);
+			path = SwiftPlayerTV;
+			sourceTree = "<group>";
+		};
+		F1EDB05748B9F963EEFED592 = {
+			isa = PBXGroup;
+			children = (
+				C085FC8ACB8A08D464E4AAB7 /* SwiftPlayerTV */,
+				6012AD7E4F33344C80263E2B /* SwiftPlayerTVTests */,
+				7809FDACB329DD5BB250A7A8 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		3F15696A8FA9360CBE8DDF01 /* SwiftPlayerTV */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E2BD5C7BC91819CD6EAEDF52 /* Build configuration list for PBXNativeTarget "SwiftPlayerTV" */;
+			buildPhases = (
+				031D8F277C525227FE5ED6E5 /* Sources */,
+				E8572B1B57728B939B159E9A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SwiftPlayerTV;
+			packageProductDependencies = (
+			);
+			productName = SwiftPlayerTV;
+			productReference = C6F924AB1EBD7263C1363010 /* SwiftPlayerTV.app */;
+			productType = "com.apple.product-type.application";
+		};
+		B3B87F9EFA1674F2FDB62113 /* SwiftPlayerTVTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 539FD2F0D8F63026AE71583A /* Build configuration list for PBXNativeTarget "SwiftPlayerTVTests" */;
+			buildPhases = (
+				DBE74A15A83311D59AEF50CA /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				788F966FF4426AD75044D644 /* PBXTargetDependency */,
+			);
+			name = SwiftPlayerTVTests;
+			packageProductDependencies = (
+			);
+			productName = SwiftPlayerTVTests;
+			productReference = 29203445D3CFEEF9385733FC /* SwiftPlayerTVTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		DB69DA39949B236C1DE29C9F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+			};
+			buildConfigurationList = 163E9796CE71C86ACCB0D480 /* Build configuration list for PBXProject "SwiftPlayerTV" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = F1EDB05748B9F963EEFED592;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 7809FDACB329DD5BB250A7A8 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				3F15696A8FA9360CBE8DDF01 /* SwiftPlayerTV */,
+				B3B87F9EFA1674F2FDB62113 /* SwiftPlayerTVTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		E8572B1B57728B939B159E9A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				245B98510AF8A8C00DB42ACD /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		031D8F277C525227FE5ED6E5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A15C98F60BDFB2F0FB978529 /* AddStreamView.swift in Sources */,
+				43C98261607A62F7E4F2BBF2 /* ContentView.swift in Sources */,
+				3756B60A1DAD29EFB112818E /* DownloadManager.swift in Sources */,
+				DD6CD6DAE0D93BF45A5D1B4D /* DownloadView.swift in Sources */,
+				F03461B0208A9794BB1910A5 /* HomeView.swift in Sources */,
+				65E27942C78B9F2BDB666B8F /* LocalFileServer.swift in Sources */,
+				65F97938C6380EADF035C546 /* LocalFilesView.swift in Sources */,
+				97C10B442258DE53695FC551 /* LocalLibrary.swift in Sources */,
+				EF9C4C41FD6AA99D37D6C74C /* MediaLibrary.swift in Sources */,
+				83C256556D5B194D211BB45A /* PlaybackProgressStore.swift in Sources */,
+				5A66A06B612F12323645DE4E /* PlayerModel.swift in Sources */,
+				239D6E46606FE16975436B61 /* PlayerScreen.swift in Sources */,
+				8AD854EC9F7CE7D29E61FEC5 /* QRCodeView.swift in Sources */,
+				1493EBCFD186E566DCBAFDDF /* SwiftPlayerTVApp.swift in Sources */,
+				449B182EBFDB9C3BC96C2024 /* ThumbnailProvider.swift in Sources */,
+				B315BA8DE5D53F5AAA1A0007 /* VideoPlayerView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DBE74A15A83311D59AEF50CA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7CDEBEBB69C7C6738B62B4E0 /* SwiftPlayerTVTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		788F966FF4426AD75044D644 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3F15696A8FA9360CBE8DDF01 /* SwiftPlayerTV */;
+			targetProxy = 6D82B42663D21732CFDD2739 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		031E2D7C22130749882F1D8F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = SVLZZQVHTX;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SwiftPlayerTV/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = SwiftPlayer;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "SwiftPlayer uses the local network so you can send media files to your Apple TV from a browser on your phone or computer.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.davide.SwiftPlayerTV;
+				SDKROOT = appletvos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_TVOS_DEPLOYMENT_TARGET)";
+			};
+			name = Release;
+		};
+		37315642363A68080DB620E3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = SVLZZQVHTX;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SwiftPlayerTV/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = SwiftPlayer;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "SwiftPlayer uses the local network so you can send media files to your Apple TV from a browser on your phone or computer.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.davide.SwiftPlayerTV;
+				SDKROOT = appletvos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_TVOS_DEPLOYMENT_TARGET)";
+			};
+			name = Debug;
+		};
+		63531F29CE6DC845D61AB818 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.davide.SwiftPlayerTVTests;
+				SDKROOT = appletvos;
+				TARGETED_DEVICE_FAMILY = 3;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SwiftPlayerTV.app/SwiftPlayerTV";
+			};
+			name = Release;
+		};
+		6D77160C42F06E08B72B81A4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = appletvos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TVOS_DEPLOYMENT_TARGET = 17.0;
+			};
+			name = Debug;
+		};
+		D0699236F4D79C90D7173FD6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = appletvos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TVOS_DEPLOYMENT_TARGET = 17.0;
+			};
+			name = Release;
+		};
+		D638CDF926FE12C2FFED4325 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.davide.SwiftPlayerTVTests;
+				SDKROOT = appletvos;
+				TARGETED_DEVICE_FAMILY = 3;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SwiftPlayerTV.app/SwiftPlayerTV";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		163E9796CE71C86ACCB0D480 /* Build configuration list for PBXProject "SwiftPlayerTV" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6D77160C42F06E08B72B81A4 /* Debug */,
+				D0699236F4D79C90D7173FD6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		539FD2F0D8F63026AE71583A /* Build configuration list for PBXNativeTarget "SwiftPlayerTVTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D638CDF926FE12C2FFED4325 /* Debug */,
+				63531F29CE6DC845D61AB818 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E2BD5C7BC91819CD6EAEDF52 /* Build configuration list for PBXNativeTarget "SwiftPlayerTV" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				37315642363A68080DB620E3 /* Debug */,
+				031E2D7C22130749882F1D8F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = DB69DA39949B236C1DE29C9F /* Project object */;
+}

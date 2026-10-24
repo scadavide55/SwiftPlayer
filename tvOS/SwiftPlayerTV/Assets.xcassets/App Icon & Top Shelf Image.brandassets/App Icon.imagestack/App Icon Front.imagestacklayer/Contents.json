@@ -1,0 +1,12 @@
+{
+  "assets" : [
+    {
+      "filename" : "Content.imageset",
+      "idiom" : "tv"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

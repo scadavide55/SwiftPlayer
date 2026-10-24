@@ -1,0 +1,56 @@
+name: SwiftPlayerTV
+options:
+  bundleIdPrefix: com.davide
+  deploymentTarget:
+    tvOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+targets:
+  SwiftPlayerTV:
+    type: application
+    platform: tvOS
+    sources:
+      - path: SwiftPlayerTV
+        excludes:
+          - Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.davide.SwiftPlayerTV
+        GENERATE_INFOPLIST_FILE: "YES"
+        INFOPLIST_FILE: SwiftPlayerTV/Info.plist
+        INFOPLIST_KEY_CFBundleDisplayName: SwiftPlayer
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: "SwiftPlayer uses the local network so you can send media files to your Apple TV from a browser on your phone or computer."
+        ASSETCATALOG_COMPILER_APPICON_NAME: "App Icon & Top Shelf Image"
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        TARGETED_DEVICE_FAMILY: "3"
+        ENABLE_PREVIEWS: "YES"
+        SWIFT_EMIT_LOC_STRINGS: "YES"
+  SwiftPlayerTVTests:
+    type: bundle.unit-test
+    platform: tvOS
+    sources:
+      - path: SwiftPlayerTVTests
+    dependencies:
+      - target: SwiftPlayerTV
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.davide.SwiftPlayerTVTests
+        GENERATE_INFOPLIST_FILE: "YES"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/SwiftPlayerTV.app/SwiftPlayerTV"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TARGETED_DEVICE_FAMILY: "3"
+schemes:
+  SwiftPlayerTV:
+    build:
+      targets:
+        SwiftPlayerTV: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - SwiftPlayerTVTests
