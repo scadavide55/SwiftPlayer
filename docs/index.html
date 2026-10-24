@@ -81,7 +81,7 @@
 
   <p>Built entirely with SwiftUI and AVFoundation. No third-party dependencies—just Apple's own frameworks.</p>
 
-  <a class="btn" href="https://github.com/scadavide55/SwiftPlayer/releases/download/v2.2/SwiftPlayer-2.2.dmg">Download the .dmg file for v2.2 Stable </a>
+  <a class="btn" href="https://github.com/scadavide55/SwiftPlayer/releases/download/v2.3/SwiftPlayer-2.3.dmg">Download the .dmg file for v2.3 </a>
   <a class="btn secondary" href="https://github.com/scadavide55/SwiftPlayer">View on GitHub</a>
 
   <video controls muted playsinline style="width:100%; border-radius:10px; margin:1.5rem 0; border:1px solid var(--border);">
@@ -95,6 +95,8 @@
     <li>Subtitle support: SRT, VTT, ASS/SSA with adjustable delay</li>
     <li>Minimal UI that fades away when idle</li>
     <li>Drag &amp; drop, keyboard navigation, and space to play/pause</li>
+    <li>Video history: reopen recent files and resume where you stopped</li>
+    <li>Picture in Picture, playback speed, skip buttons, and volume controls</li>
   </ul>
 
   <h2>Supported Formats</h2>
@@ -127,20 +129,19 @@ cd SwiftPlayer
 open SwiftPlayer.xcodeproj</code></pre>
 
   <h2>Changelog</h2>
-  <h3 style="margin-bottom: 0.25rem;">2.3 — Future </h3>
-  <p style="color: var(--subtext); margin-top: 0;"><em>Not released</em></p>
+  <h3 style="margin-bottom: 0.25rem;">2.3 — Stable</h3>
+  <p style="color: var(--subtext); margin-top: 0;"><em>Latest</em></p>
   <ul>
-    <li>Picture in Picture support imrpoved </li>
-    <li>APPLE tvOS version ( the thing that's requiring most of the time) </li>
-    <li>Video playback optimizations</li>
-    <li>General optimizations and stability fixes for Intel Macs </li>
-    <li>More modern UI </li>
-    <li>Video history</li>
-    <li>.mkv support ( maybe) </li>
+    <li>Video history: recent files on the start screen, with resume where you stopped</li>
+    <li>More modern UI: frosted-glass controls, hover-expanding scrubber, redesigned start screen</li>
+    <li>Intel Mac stability and performance fixes: smoother seeking, fewer redraws</li>
+    <li>Subtitles load in the background; UTF-16, Windows-1252, and Windows line endings supported</li>
+    <li>Fixed ASS/SSA 3-digit millisecond timestamps (regression)</li>
+    <li>Fixed speed change resuming paused playback</li>
   </ul>
 
   <h3 style="margin-bottom: 0.25rem;">2.2 — Stable</h3>
-  <p style="color: var(--subtext); margin-top: 0;"><em>Latest</em></p>
+  <p style="color: var(--subtext); margin-top: 0;"><em>Previous</em></p>
   <ul>
     <li>Picture in Picture support</li>
     <li>Playback speed control (0.5× – 2×)</li>
@@ -154,7 +155,7 @@ open SwiftPlayer.xcodeproj</code></pre>
   </ul>
 
   <h3 style="margin-bottom: 0.25rem;">2.1.1 — Stable</h3>
-  <p style="color: var(--subtext); margin-top: 0;"><em>Previous</em></p>
+  <p style="color: var(--subtext); margin-top: 0;"><em>Older</em></p>
   <ul>
     <li>Real reverse playback via AVPlayer's negative rate</li>
     <li>Subtitle timestamp fix (ASS/SSA 3-digit milliseconds)</li>
